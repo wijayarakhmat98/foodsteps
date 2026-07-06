@@ -28,7 +28,7 @@ struct NewTripView: View {
                     )
                     DatePicker(
                         "To",
-                        selection: $startTime,
+                        selection: $endTime,
                         displayedComponents: [.hourAndMinute]
                     )
                 }
