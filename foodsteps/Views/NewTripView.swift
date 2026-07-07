@@ -14,54 +14,41 @@ struct NewTripView: View {
         NavigationStack {
             Form {
                 Section("Trip Name") {
-					TextField("Provide a trip name", text: $name)
+                    TextField("Provide a trip name", text: $name)
                 }
                 Section("Meeting Point") {
                     TextField("Set a meeting point", text: .constant(""))
                         .disabled(true)
                 }
                 Section("Time") {
-                    DatePicker(
-                        "From",
-                        selection: $startTime,
-                        displayedComponents: [.hourAndMinute]
-                    )
-                    DatePicker(
-                        "To",
-                        selection: $endTime,
-                        displayedComponents: [.hourAndMinute]
-                    )
+                    DatePicker("From", selection: $startTime, displayedComponents: [.hourAndMinute])
+                    DatePicker("To", selection: $endTime, displayedComponents: [.hourAndMinute])
                 }
                 Section("Date") {
-                    DatePicker(
-                        "Pick a date",
-                        selection: $date,
-                        displayedComponents: [.date]
-                    )
-                    .datePickerStyle(.graphical)
+                    DatePicker("Pick a date", selection: $date, displayedComponents: [.date])
+                        .datePickerStyle(.graphical)
                 }
             }
             .navigationTitle("New Trip")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(role: .cancel) {
+                    Button("Cancel", role: .cancel) {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(role: .confirm) {
-						let newTrip = Trip(context: moc)
+                    Button("Save") {
+                        let newTrip = Trip(context: moc)
                         newTrip.id = UUID()
                         newTrip.created = Date()
-                        newTrip.name = name
+                        newTrip.name = name.isEmpty ? "New Trip" : name
                         newTrip.start = combineDateAndTime(date: date, time: startTime)
                         newTrip.end = combineDateAndTime(date: date, time: endTime)
                         try? moc.save()
                         dismiss()
                     }
                 }
-
             }
         }
     }
@@ -80,8 +67,4 @@ struct NewTripView: View {
 
         return calendar.date(from: mergedComponents) ?? Date()
     }
-}
-
-#Preview {
-    NewTripView()
 }

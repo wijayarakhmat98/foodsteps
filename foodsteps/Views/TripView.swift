@@ -3,7 +3,7 @@ import SwiftUI
 
 struct TripView: View {
     @Environment(\.managedObjectContext) private var moc
-    @FetchRequest(sortDescriptors: [SortDescriptor(\.created)])
+    @FetchRequest(sortDescriptors: [SortDescriptor(\.created, order: .reverse)])
     private var trips: FetchedResults<Trip>
 
     @State private var showNewTrip = false
@@ -14,13 +14,14 @@ struct TripView: View {
                 ForEach(trips) { trip in
                     NavigationLink(value: trip) {
                         Text(trip.name ?? "Unknown Trip")
+                            .font(.headline)
                     }
                 }
                 .onDelete(perform: deleteTrips)
             }
-            .navigationTitle("Trip")
+            .navigationTitle("Trips")
             .navigationDestination(for: Trip.self) { trip in
-				TripDetailView(trip: trip)
+                TripInputView(trip: trip)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -37,6 +38,11 @@ struct TripView: View {
             .sheet(isPresented: $showNewTrip) {
                 NewTripView()
             }
+            .overlay {
+                if trips.isEmpty {
+                    ContentUnavailableView("No Trips", systemImage: "paperplane", description: Text("Tap the + button to plan your first trip."))
+                }
+            }
         }
     }
 
@@ -47,8 +53,4 @@ struct TripView: View {
         }
         try? moc.save()
     }
-}
-
-#Preview {
-    TripView()
 }
