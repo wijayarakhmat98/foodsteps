@@ -147,7 +147,7 @@ struct ActiveRouteView: View {
 
                 .buttonStyle(.borderedProminent)
 
-                Button("Next Stop") {
+                Button(routePlanner.isLastNavigationStop ? "Finish Trip" : "Next Stop") {
 
                     if routePlanner.advanceToNextStop() {
 

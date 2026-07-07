@@ -99,6 +99,18 @@ struct TripInputView: View {
         .sheet(isPresented: $isShowingAddSheet) { addPlaceSheet }
         .sheet(isPresented: $isEditingSchedule) { scheduleSheet }
         .sheet(isPresented: $isEditingMeetingPoint) { meetingPointSheet }
+        .fullScreenCover(isPresented: Binding(
+            get: { routePlanner.isFinished },
+            set: { routePlanner.isFinished = $0 }
+        )) {
+            TripFinishedView(
+                trip: trip,
+                visitedStops: finishedStopEntities,
+                routePlanner: routePlanner,
+                participantName: currentParticipantName,
+                onSaveResult: saveTripResult
+            )
+        }
         .alert("Add Person", isPresented: $isAddingParticipant) {
             TextField("Name", text: $newParticipantName)
             Button("Cancel", role: .cancel) { newParticipantName = "" }
@@ -557,6 +569,7 @@ struct TripInputView: View {
                 stop.appleMapsId = item.identifier?.rawValue ?? ""
                 stop.addedByName = currentParticipantName
                 stop.createdAt = Date()
+                stop.category = categoryLabel(for: item.pointOfInterestCategory)
                 stop.trip = trip
                 try? moc.save()
 
@@ -596,36 +609,46 @@ struct TripInputView: View {
     }
 
     private var routeMapPreview: some View {
-        Map(position: $mapPosition, interactionModes: [.pan, .zoom]) {
-            if let start = trip.meetingPointCoordinate ?? locationManager.currentLocation {
-                Annotation(trip.meetingPointName ?? "Start", coordinate: start) {
-                    ZStack {
-                        Circle().fill(Color.blue).frame(width: 16, height: 16)
-                        Circle().stroke(.white, lineWidth: 2).frame(width: 16, height: 16)
+            Map(position: $mapPosition, interactionModes: [.pan, .zoom]) {
+                
+                // 1. Shows your actual live GPS location (the native Apple Maps blue dot)
+                UserAnnotation()
+
+                // 2. The Meeting Point (or fallback to your current location if not set)
+                if let start = trip.meetingPointCoordinate ?? locationManager.currentLocation {
+                                Annotation(trip.meetingPointName ?? "Start", coordinate: start) {
+                                    ZStack {
+                                        // Changed to black background with mappin icon
+                                        Circle().fill(Color.black).frame(width: 28, height: 28)
+                                        Image(systemName: "mappin")
+                                            .font(.caption.bold())
+                                            .foregroundColor(.white)
+                                    }
+                                    .shadow(radius: 2)
+                                }
+                            }
+
+                // 3. The numbered stops
+                ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
+                    Annotation(stop.name, coordinate: stop.mapItem.placemark.coordinate) {
+                        ZStack {
+                            Circle().fill(Color.black).frame(width: 24, height: 24)
+                            Text("\(index + 1)")
+                                .font(.caption2.bold())
+                                .foregroundColor(.white)
+                        }
+                        .shadow(radius: 2)
                     }
-                    .shadow(radius: 2)
+                }
+
+                // 4. The route lines
+                ForEach(Array(routePlanner.legs.enumerated()), id: \.offset) { _, leg in
+                    MapPolyline(leg)
+                        .stroke(.black.opacity(0.6), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
                 }
             }
-
-            ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
-                Annotation(stop.name, coordinate: stop.mapItem.placemark.coordinate) {
-                    ZStack {
-                        Circle().fill(Color.black).frame(width: 24, height: 24)
-                        Text("\(index + 1)")
-                            .font(.caption2.bold())
-                            .foregroundColor(.white)
-                    }
-                    .shadow(radius: 2)
-                }
-            }
-
-            ForEach(Array(routePlanner.legs.enumerated()), id: \.offset) { _, leg in
-                MapPolyline(leg)
-                    .stroke(.black.opacity(0.6), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
-            }
+            .mapStyle(.standard)
         }
-        .mapStyle(.standard)
-    }
 
     private var routeStatsRow: some View {
         HStack(spacing: 6) {
@@ -811,5 +834,32 @@ struct TripInputView: View {
             isPreparingRoute = false
             completion()
         }
+    }
+
+    // MARK: - Trip finished
+
+    /// The Core Data `Stop` entities in visited order, matched up with
+    /// `routePlanner.orderedStops` by id so the summary screen can show
+    /// address, category, and voting info alongside visit times.
+    private var finishedStopEntities: [Stop] {
+        routePlanner.orderedStops.compactMap { routeStop in
+            stops.first { $0.id?.uuidString == routeStop.id }
+        }
+    }
+
+    private func saveTripResult() {
+        for (index, stop) in finishedStopEntities.enumerated() {
+            if let window = routePlanner.visitedWindow(at: index) {
+                stop.visitedAt = window.start
+                stop.departedAt = window.end
+            }
+        }
+
+        trip.finishedAt = routePlanner.finishedAt ?? Date()
+
+        try? moc.save()
+
+        routePlanner.isFinished = false
+        navigateToNavigation = false
     }
 }

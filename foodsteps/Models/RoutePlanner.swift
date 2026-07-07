@@ -5,6 +5,7 @@ import Observation
 @Observable
 class RoutePlanner {
     // Explicitly tracking by ID using RouteStop
+    var startingCoordinate: CLLocationCoordinate2D?
     var stops: [RouteStop] = []
     var orderedStops: [RouteStop] = []
     var legs: [MKRoute] = []
@@ -17,8 +18,34 @@ class RoutePlanner {
     var isNavigating = false
     var isPaused = false
     var currentLegIndex = 0
-    
+
+    /// Set to true once every stop has been visited, so the app can present
+    /// the Trip Finished summary screen. Reset whenever navigation (re)starts.
+    var isFinished = false
+
+    /// Arrival time at each stop, keyed by its index in `orderedStops`.
+    var arrivalTimestamps: [Int: Date] = [:]
+    var tripStartedAt: Date?
+    var finishedAt: Date?
+
     private let arrivalDistance: CLLocationDistance = 40
+
+    /// The time window spent at a given stop, derived from arrival timestamps.
+    /// The stop's departure is the arrival at the next stop, or the trip's
+    /// finish time for the last stop.
+    func visitedWindow(at index: Int) -> (start: Date, end: Date)? {
+        guard let start = arrivalTimestamps[index] else { return nil }
+
+        if let nextArrival = arrivalTimestamps[index + 1] {
+            return (start, nextArrival)
+        }
+
+        if index == orderedStops.count - 1, let finishedAt {
+            return (start, finishedAt)
+        }
+
+        return (start, Date())
+    }
     
     func clear() {
         stops = []
@@ -31,34 +58,42 @@ class RoutePlanner {
         totalDistance = 0
         totalTime = 0
         stopNavigation()
+        isFinished = false
+        arrivalTimestamps = [:]
+        tripStartedAt = nil
+        finishedAt = nil
     }
 
     @MainActor
-    func recalculateLegsForCurrentOrder() async {
-        guard !orderedStops.isEmpty else { return }
-        isOptimizing = true
-        defer { isOptimizing = false }
+        func recalculateLegsForCurrentOrder() async {
+            // Grab the saved starting coordinate
+            guard !orderedStops.isEmpty, let start = startingCoordinate else { return }
+            isOptimizing = true
+            defer { isOptimizing = false }
 
-        let (newLegs, distanceSum, timeSum) = await Self.fetchLegs(for: orderedStops, transportType: transportType)
-        legs = newLegs
-        totalDistance = distanceSum
-        totalTime = timeSum
-    }
+            // Pass the start coordinate into fetchLegs
+            let (newLegs, distanceSum, timeSum) = await Self.fetchLegs(for: orderedStops, startingAt: start, transportType: transportType)
+            legs = newLegs
+            totalDistance = distanceSum
+            totalTime = timeSum
+        }
 
     @MainActor
-    func optimizeAndCalculate(from userCoordinate: CLLocationCoordinate2D) async {
-        guard !stops.isEmpty else { return }
-        isOptimizing = true
-        defer { isOptimizing = false }
+        func optimizeAndCalculate(from userCoordinate: CLLocationCoordinate2D) async {
+            guard !stops.isEmpty else { return }
+            isOptimizing = true
+            self.startingCoordinate = userCoordinate // Save the meeting point here!
+            defer { isOptimizing = false }
 
-        let ordered = Self.bestOrder(stops: stops, startingAt: userCoordinate)
-        orderedStops = ordered
+            let ordered = Self.bestOrder(stops: stops, startingAt: userCoordinate)
+            orderedStops = ordered
 
-        let (newLegs, distanceSum, timeSum) = await Self.fetchLegs(for: ordered, transportType: transportType)
-        legs = newLegs
-        totalDistance = distanceSum
-        totalTime = timeSum
-    }
+            // Pass the start coordinate into fetchLegs
+            let (newLegs, distanceSum, timeSum) = await Self.fetchLegs(for: ordered, startingAt: userCoordinate, transportType: transportType)
+            legs = newLegs
+            totalDistance = distanceSum
+            totalTime = timeSum
+        }
 
     private static func bestOrder(stops: [RouteStop], startingAt userCoordinate: CLLocationCoordinate2D) -> [RouteStop] {
         guard stops.count > 1 else { return stops }
@@ -187,28 +222,33 @@ class RoutePlanner {
         return order
     }
 
-    private static func fetchLegs(for orderedStops: [RouteStop], transportType: MKDirectionsTransportType) async -> ([MKRoute], CLLocationDistance, TimeInterval) {
-        var newLegs: [MKRoute] = []
-        var previousMapItem = MKMapItem.forCurrentLocation()
-        var distanceSum: CLLocationDistance = 0
-        var timeSum: TimeInterval = 0
+    // Update the function signature to accept `startingAt`
+        private static func fetchLegs(for orderedStops: [RouteStop], startingAt startCoordinate: CLLocationCoordinate2D, transportType: MKDirectionsTransportType) async -> ([MKRoute], CLLocationDistance, TimeInterval) {
+            var newLegs: [MKRoute] = []
+            
+            // FIX: Start from the given coordinate instead of the device GPS
+            let startPlacemark = MKPlacemark(coordinate: startCoordinate)
+            var previousMapItem = MKMapItem(placemark: startPlacemark)
+            
+            var distanceSum: CLLocationDistance = 0
+            var timeSum: TimeInterval = 0
 
-        for stop in orderedStops {
-            let request = MKDirections.Request()
-            request.source = previousMapItem
-            request.destination = stop.mapItem
-            request.transportType = transportType
+            for stop in orderedStops {
+                let request = MKDirections.Request()
+                request.source = previousMapItem
+                request.destination = stop.mapItem
+                request.transportType = transportType
 
-            let directions = MKDirections(request: request)
-            if let response = try? await directions.calculate(), let leg = response.routes.first {
-                newLegs.append(leg)
-                distanceSum += leg.distance
-                timeSum += leg.expectedTravelTime
+                let directions = MKDirections(request: request)
+                if let response = try? await directions.calculate(), let leg = response.routes.first {
+                    newLegs.append(leg)
+                    distanceSum += leg.distance
+                    timeSum += leg.expectedTravelTime
+                }
+                previousMapItem = stop.mapItem
             }
-            previousMapItem = stop.mapItem
+            return (newLegs, distanceSum, timeSum)
         }
-        return (newLegs, distanceSum, timeSum)
-    }
 
     // MARK: Navigation control
     func startNavigation() {
@@ -220,6 +260,14 @@ class RoutePlanner {
         isPaused = false
 
         isNavigating = true
+
+        isFinished = false
+
+        arrivalTimestamps = [:]
+
+        tripStartedAt = Date()
+
+        finishedAt = nil
     }
 
     func stopNavigation() {
@@ -259,9 +307,15 @@ class RoutePlanner {
             return false
         }
 
+        arrivalTimestamps[currentLegIndex] = Date()
+
         currentLegIndex += 1
 
         if currentLegIndex >= orderedStops.count {
+
+            finishedAt = Date()
+
+            isFinished = true
 
             stopNavigation()
 

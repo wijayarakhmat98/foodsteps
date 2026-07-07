@@ -39,3 +39,19 @@ extension Trip {
         return CLLocationCoordinate2D(latitude: meetingPointLatitude, longitude: meetingPointLongitude)
     }
 }
+
+/// Maps MapKit's point-of-interest category to a short, friendly label used
+/// on the trip summary screen (e.g. "Coffee Shop", "Bakery", "Street Food").
+func categoryLabel(for category: MKPointOfInterestCategory?) -> String? {
+    guard let category else { return nil }
+    switch category {
+    case .cafe:
+        return "Coffee Shop"
+    case .bakery:
+        return "Bakery"
+    case .restaurant:
+        return "Street Food"
+    default:
+        return "Restaurant"
+    }
+}
