@@ -204,7 +204,14 @@ struct TripInputView: View {
                 ForEach(participants, id: \.objectID) { participant in
                     avatarCircle(for: participant.name ?? "?")
                 }
-                addPersonButton
+                ShareLink(item: trip, preview: SharePreview("Share thiss Trip")) {
+                    Image(systemName: "plus")
+                        .font(.caption.bold())
+                        .foregroundColor(.secondary)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color(uiColor: .systemGray5)))
+                        .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
+                }
             }
             Text("\(participants.count) \(participants.count == 1 ? "Person" : "People") Joined")
                 .font(.caption)

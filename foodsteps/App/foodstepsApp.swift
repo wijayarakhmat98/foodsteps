@@ -1,11 +1,10 @@
 import CoreData
 import SwiftUI
 
+let dataController = DataController()
+
 @main
 struct foodstepsApp: App {
-    // Switch this back to @State since DataController is now @Observable
-    @State private var dataController = DataController()
-
     var body: some Scene {
         WindowGroup {
             ContentView()

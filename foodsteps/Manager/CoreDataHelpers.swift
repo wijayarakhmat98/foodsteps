@@ -1,6 +1,33 @@
 import Foundation
 import MapKit
 import CoreLocation
+import CoreTransferable
+import CloudKit
+import CoreData
+
+extension Trip: Transferable {
+    public static var transferRepresentation: some TransferRepresentation {
+        let container = dataController.container
+        let ckContainer = dataController.ckContainer
+        CKShareTransferRepresentation { trip in
+            if let share = try? container.fetchShares(matching: [trip.objectID]).first?.value {
+                return .existing(share, container: ckContainer)
+            }
+            let tripURI = trip.objectID.uriRepresentation()
+            return .prepareShare(container: ckContainer) {
+                let moc = container.viewContext
+                let trip = await moc.perform {
+                    guard let objectID = moc.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: tripURI) else {
+                        fatalError("Unable to get managed objectID for: \(tripURI).")
+                    }
+                    return moc.object(with: objectID)
+                }
+                let (_, share, _) = try await container.share([trip], to: nil)
+                return share
+            }
+        }
+    }
+}
 
 extension Stop {
     /// Hearts are stored as a comma-separated list of participant names (`votedByCSV`).
