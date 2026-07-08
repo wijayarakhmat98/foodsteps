@@ -2,7 +2,6 @@ import CoreData
 import Foundation
 import Observation
 
-// Use the modern @Observable macro to match the rest of your app!
 @Observable
 class DataController {
     let container = NSPersistentCloudKitContainer(name: "foodsteps")
