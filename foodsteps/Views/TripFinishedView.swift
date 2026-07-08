@@ -3,7 +3,7 @@ import MapKit
 import CoreData
 
 struct TripFinishedView: View {
-    let trip: Trip
+    @ObservedObject var trip: Trip
     let visitedStops: [Stop]
     let routePlanner: RoutePlanner
     let participantName: String
