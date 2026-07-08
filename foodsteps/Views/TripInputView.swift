@@ -8,12 +8,21 @@ private enum HubTab: String, CaseIterable {
 }
 
 struct TripInputView: View {
-    let trip: Trip
+    @ObservedObject var trip: Trip
 
     @Environment(\.managedObjectContext) private var moc
 
-    @FetchRequest private var stops: FetchedResults<Stop>
-    @FetchRequest private var participants: FetchedResults<Participant>
+    // MARK: - Core Data Propagation
+    // Replaced @FetchRequest with computed properties straight from the ObservedObject
+    private var stops: [Stop] {
+        let stopSet = trip.stops as? Set<Stop> ?? []
+        return stopSet.sorted { ($0.createdAt ?? Date()) < ($1.createdAt ?? Date()) }
+    }
+    
+    private var participants: [Participant] {
+        let participantSet = trip.participants as? Set<Participant> ?? []
+        return participantSet.sorted { ($0.name ?? "") < ($1.name ?? "") }
+    }
 
     @State private var locationManager = LocationManager()
     @State private var routePlanner = RoutePlanner()
@@ -49,14 +58,6 @@ struct TripInputView: View {
 
     init(trip: Trip) {
         self.trip = trip
-        _stops = FetchRequest(
-            sortDescriptors: [SortDescriptor(\Stop.createdAt)],
-            predicate: NSPredicate(format: "trip == %@", trip)
-        )
-        _participants = FetchRequest(
-            sortDescriptors: [SortDescriptor(\Participant.name)],
-            predicate: NSPredicate(format: "trip == %@", trip)
-        )
     }
 
     var body: some View {
@@ -152,7 +153,6 @@ struct TripInputView: View {
         .onChange(of: trip.meetingPointLatitude) { _, _ in
             fitMapPreview()
         }
-
         .onChange(of: trip.meetingPointLongitude) { _, _ in
             fitMapPreview()
         }
@@ -382,13 +382,10 @@ struct TripInputView: View {
     }
 
     private func setMeetingPoint(from completion: MKLocalSearchCompletion) {
-
         let request = MKLocalSearch.Request(completion: completion)
 
         Task {
-
             let search = MKLocalSearch(request: request)
-
             if let response = try? await search.start(),
                let item = response.mapItems.first {
 
@@ -409,15 +406,10 @@ struct TripInputView: View {
 
                 // Recalculate immediately if there are stops
                 if !stops.isEmpty {
-
                     computeRoute { }
-
                 }
-
             }
-
         }
-
     }
 
     private var sortHeaderRow: some View {
@@ -443,7 +435,7 @@ struct TripInputView: View {
     }
 
     private var sortedStops: [Stop] {
-        Array(stops).sorted { $0.hearts > $1.hearts }
+        stops.sorted { $0.hearts > $1.hearts }
     }
 
     @ViewBuilder
@@ -616,7 +608,6 @@ struct TripInputView: View {
                 stop.address = item.placemark.title
                 stop.latitude = candidateCoordinate.latitude
                 stop.longitude = candidateCoordinate.longitude
-                // Fix: Properly handle optional string to satisfy CoreData strict unwrapping
                 stop.appleMapsId = item.identifier?.rawValue ?? ""
                 stop.addedByName = currentParticipantName
                 stop.createdAt = Date()
@@ -659,46 +650,40 @@ struct TripInputView: View {
     }
 
     private var routeMapPreview: some View {
-            Map(position: $mapPosition, interactionModes: [.pan, .zoom]) {
-                
-                // 1. Shows your actual live GPS location (the native Apple Maps blue dot)
-                UserAnnotation()
+        Map(position: $mapPosition, interactionModes: [.pan, .zoom]) {
+            UserAnnotation()
 
-                // 2. The Meeting Point (or fallback to your current location if not set)
-                if let start = trip.meetingPointCoordinate ?? locationManager.currentLocation {
-                                Annotation(trip.meetingPointName ?? "Start", coordinate: start) {
-                                    ZStack {
-                                        // Changed to black background with mappin icon
-                                        Circle().fill(Color.black).frame(width: 28, height: 28)
-                                        Image(systemName: "mappin")
-                                            .font(.caption.bold())
-                                            .foregroundColor(.white)
-                                    }
-                                    .shadow(radius: 2)
-                                }
-                            }
-
-                // 3. The numbered stops
-                ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
-                    Annotation(stop.name, coordinate: stop.mapItem.placemark.coordinate) {
-                        ZStack {
-                            Circle().fill(Color.black).frame(width: 24, height: 24)
-                            Text("\(index + 1)")
-                                .font(.caption2.bold())
-                                .foregroundColor(.white)
-                        }
-                        .shadow(radius: 2)
+            if let start = trip.meetingPointCoordinate ?? locationManager.currentLocation {
+                Annotation(trip.meetingPointName ?? "Start", coordinate: start) {
+                    ZStack {
+                        Circle().fill(Color.black).frame(width: 28, height: 28)
+                        Image(systemName: "mappin")
+                            .font(.caption.bold())
+                            .foregroundColor(.white)
                     }
-                }
-
-                // 4. The route lines
-                ForEach(Array(routePlanner.legs.enumerated()), id: \.offset) { _, leg in
-                    MapPolyline(leg)
-                        .stroke(.black.opacity(0.6), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                    .shadow(radius: 2)
                 }
             }
-            .mapStyle(.standard)
+
+            ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
+                Annotation(stop.name, coordinate: stop.mapItem.placemark.coordinate) {
+                    ZStack {
+                        Circle().fill(Color.black).frame(width: 24, height: 24)
+                        Text("\(index + 1)")
+                            .font(.caption2.bold())
+                            .foregroundColor(.white)
+                    }
+                    .shadow(radius: 2)
+                }
+            }
+
+            ForEach(Array(routePlanner.legs.enumerated()), id: \.offset) { _, leg in
+                MapPolyline(leg)
+                    .stroke(.black.opacity(0.6), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+            }
         }
+        .mapStyle(.standard)
+    }
 
     private var routeStatsRow: some View {
         HStack(spacing: 6) {
@@ -716,7 +701,6 @@ struct TripInputView: View {
     }
 
     private func formattedTotalDistance() -> String {
-        // Fix: Explicitly cast totalDistance to Double for String(format:)
         let meters = Double(routePlanner.totalDistance)
         return meters >= 1000 ? String(format: "~%.1f km", meters / 1000.0) : String(format: "~%.0f m", meters)
     }
@@ -776,7 +760,6 @@ struct TripInputView: View {
 
     private func distanceLabel(forLegAt index: Int) -> String {
         if !isUpdatingOrder, index < routePlanner.legs.count {
-            // Fix: Strict Type-Casting for iOS 18 compatibility
             let dist = Double(routePlanner.legs[index].distance)
             return dist >= 1000 ? String(format: "%.1f km", dist / 1000.0) : String(format: "%.0f m", dist)
         }
@@ -888,9 +871,6 @@ struct TripInputView: View {
 
     // MARK: - Trip finished
 
-    /// The Core Data `Stop` entities in visited order, matched up with
-    /// `routePlanner.orderedStops` by id so the summary screen can show
-    /// address, category, and voting info alongside visit times.
     private var finishedStopEntities: [Stop] {
         routePlanner.orderedStops.compactMap { routeStop in
             stops.first { $0.id?.uuidString == routeStop.id }
