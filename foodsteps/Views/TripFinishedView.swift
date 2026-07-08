@@ -1,11 +1,3 @@
-//
-//  TripFinishedView.swift
-//  foodsteps
-//
-//  Created by Willy Tanuwijaya on 07/07/26.
-//
-
-
 import SwiftUI
 import MapKit
 import CoreData
@@ -22,12 +14,28 @@ struct TripFinishedView: View {
     @State private var newPlacesCount: Int = 0
 
     var body: some View {
-        ZStack(alignment: .top) {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                    mapHeader
-                        .frame(height: 260)
+                    // Header area
+                    ZStack(alignment: .top) {
+                        // Map stays in the background
+                        mapHeader
+                            .frame(height: 260)
 
+                        // Purple card overlays the top of the map
+                        Color.brandPurple
+                            .frame(height: 180)
+                            .clipShape(
+                                UnevenRoundedRectangle(
+                                    bottomLeadingRadius: 40,
+                                    bottomTrailingRadius: 40
+                                )
+                            )
+                            .ignoresSafeArea(edges: .top)
+                    }
+
+                    // Keep all existing content BELOW the map
                     VStack(alignment: .leading, spacing: 18) {
                         tripSummaryRow
 
@@ -49,22 +57,35 @@ struct TripFinishedView: View {
                 }
             }
             .ignoresSafeArea(edges: .top)
-
-            topBar
-        }
-        .safeAreaInset(edge: .bottom) {
-            saveResultButton
-        }
-        .onAppear {
-            fitMap()
-            computeNewPlacesCount()
+            .navigationTitle("Trip Finished")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: onSaveResult) {
+                        Image(systemName: "chevron.left")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: shareTrip) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                saveResultButton
+            }
+            .onAppear {
+                fitMap()
+                computeNewPlacesCount()
+            }
         }
     }
 
     // MARK: - Header
 
     private var mapHeader: some View {
-        Map(position: $mapPosition, interactionModes: []) {
+        Map(position: $mapPosition, interactionModes: [.pan, .zoom]) {
             ForEach(Array(visitedStops.enumerated()), id: \.offset) { index, stop in
                 Annotation(stop.name ?? "Stop", coordinate: CLLocationCoordinate2D(latitude: stop.latitude, longitude: stop.longitude)) {
                     ZStack {
@@ -85,30 +106,8 @@ struct TripFinishedView: View {
         .mapStyle(.standard)
     }
 
-    private var topBar: some View {
-        HStack {
-            Button(action: onSaveResult) {
-                Image(systemName: "chevron.left")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding(10)
-                    .background(Circle().fill(Color.black.opacity(0.35)))
-            }
-
-            Spacer()
-
-            Text("Trip Finished")
-                .font(.headline)
-                .foregroundColor(.white)
-
-            Spacer()
-
-            Circle()
-                .fill(Color.clear)
-                .frame(width: 36, height: 36)
-        }
-        .padding(.horizontal)
-        .padding(.top, 50)
+    private func shareTrip() {
+        // Hook up to your share sheet / export flow here.
     }
 
     // MARK: - Summary
@@ -154,42 +153,13 @@ struct TripFinishedView: View {
     private var placesTimeline: some View {
         VStack(spacing: 0) {
             ForEach(Array(visitedStops.enumerated()), id: \.offset) { index, stop in
-                placeTimelineRow(index: index, stop: stop, isLast: index == visitedStops.count - 1)
+                StopTimelineRow(
+                    index: index,
+                    title: stop.name ?? "Unknown place",
+                    subtitle: subtitle(for: stop, at: index),
+                    isLast: index == visitedStops.count - 1
+                )
             }
-        }
-    }
-
-    private func placeTimelineRow(index: Int, stop: Stop, isLast: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(spacing: 0) {
-                ZStack {
-                    Circle().fill(Color.purple).frame(width: 26, height: 26)
-                    Text("\(index + 1)")
-                        .font(.caption2.bold())
-                        .foregroundColor(.white)
-                }
-                if !isLast {
-                    Rectangle()
-                        .fill(Color.purple.opacity(0.3))
-                        .frame(width: 2)
-                        .frame(minHeight: 30)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(stop.name ?? "Unknown place")
-                    .font(.subheadline.weight(.semibold))
-
-                Text(subtitle(for: stop, at: index))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(uiColor: .systemGray6))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.bottom, isLast ? 0 : 10)
         }
     }
 
@@ -219,16 +189,27 @@ struct TripFinishedView: View {
 
     // MARK: - Save
 
+    @State private var isSaved = false
+
     private var saveResultButton: some View {
-        Button(action: onSaveResult) {
-            Text("Save Result")
-                .font(.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.orange)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+        Button {
+            onSaveResult()
+            isSaved = true
+        } label: {
+            HStack(spacing: 8) {
+                if isSaved {
+                    Image(systemName: "checkmark.circle.fill")
+                }
+                Text(isSaved ? "Saved" : "Save Result")
+            }
+            .font(.headline)
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(isSaved ? Color.green : Color.orange)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
         }
+        .disabled(isSaved)
         .padding()
         .background(.bar)
     }

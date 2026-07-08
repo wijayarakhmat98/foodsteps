@@ -37,6 +37,8 @@ struct TripInputView: View {
 
     @State private var isShowingAddSheet = false
     @State private var isSearching = false
+    @State private var isShowingDuplicatePlaceAlert = false
+    @State private var duplicatePlaceName = ""
 
     @State private var isPreparingRoute = false
     @State private var isUpdatingOrder = false
@@ -72,6 +74,7 @@ struct TripInputView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text(selectedTab == .places ? (trip.name ?? "Trip") : "Route")
@@ -92,6 +95,7 @@ struct TripInputView: View {
         }
         .navigationDestination(isPresented: $navigateToNavigation) {
             ActiveRouteView(
+                trip: trip,
                 routePlanner: routePlanner,
                 locationManager: locationManager
             )
@@ -127,6 +131,11 @@ struct TripInputView: View {
                 trip.name = trimmed
                 try? moc.save()
             }
+        }
+        .alert("Already Added", isPresented: $isShowingDuplicatePlaceAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("\(duplicatePlaceName) is already a stop on this trip.")
         }
         .onAppear {
             locationManager.requestPermissionAndStart()
@@ -368,6 +377,7 @@ struct TripInputView: View {
                     Button("Done") { isEditingMeetingPoint = false }
                 }
             }
+            .onAppear { searchService.configure(for: .anyPlace) }
         }
     }
 
@@ -384,6 +394,7 @@ struct TripInputView: View {
 
                 trip.meetingPointName = item.name
                 trip.meetingPointAddress = item.placemark.title
+                trip.meetingPointAppleMapsId = item.identifier?.rawValue
                 trip.meetingPointLatitude = item.placemark.coordinate.latitude
                 trip.meetingPointLongitude = item.placemark.coordinate.longitude
 
@@ -533,11 +544,19 @@ struct TripInputView: View {
                     Button {
                         addStop(from: completion)
                     } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(completion.title).font(.headline)
-                            Text(completion.subtitle).font(.subheadline).foregroundColor(.secondary)
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(completion.title).font(.headline)
+                                Text(completion.subtitle).font(.subheadline).foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            if isAlreadyAdded(completion) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                            }
                         }
                     }
+                    .foregroundColor(isAlreadyAdded(completion) ? .secondary : .primary)
                 }
                 .listStyle(.plain)
             }
@@ -548,7 +567,16 @@ struct TripInputView: View {
                     Button("Done") { isShowingAddSheet = false }
                 }
             }
-            .onAppear { isSearchFocused = true }
+            .onAppear {
+                searchService.configure(for: .foodOnly)
+                isSearchFocused = true
+            }
+        }
+    }
+
+    private func isAlreadyAdded(_ completion: MKLocalSearchCompletion) -> Bool {
+        stops.contains { existing in
+            (existing.name ?? "").caseInsensitiveCompare(completion.title) == .orderedSame
         }
     }
 
@@ -559,12 +587,35 @@ struct TripInputView: View {
             let search = MKLocalSearch(request: request)
             defer { isSearching = false }
             if let response = try? await search.start(), let item = response.mapItems.first {
+
+                let candidateId = item.identifier?.rawValue
+                let candidateCoordinate = item.placemark.coordinate
+
+                let isDuplicate = stops.contains { existing in
+                    if let candidateId, !candidateId.isEmpty, existing.appleMapsId == candidateId {
+                        return true
+                    }
+                    let sameName = (existing.name ?? "").caseInsensitiveCompare(item.name ?? "") == .orderedSame
+                    let existingLocation = CLLocation(latitude: existing.latitude, longitude: existing.longitude)
+                    let candidateLocation = CLLocation(latitude: candidateCoordinate.latitude, longitude: candidateCoordinate.longitude)
+                    return sameName && existingLocation.distance(from: candidateLocation) < 25
+                }
+
+                searchService.searchQuery = ""
+                isShowingAddSheet = false
+
+                guard !isDuplicate else {
+                    duplicatePlaceName = item.name ?? "This place"
+                    isShowingDuplicatePlaceAlert = true
+                    return
+                }
+
                 let stop = Stop(context: moc)
                 stop.id = UUID()
                 stop.name = item.name
                 stop.address = item.placemark.title
-                stop.latitude = item.placemark.coordinate.latitude
-                stop.longitude = item.placemark.coordinate.longitude
+                stop.latitude = candidateCoordinate.latitude
+                stop.longitude = candidateCoordinate.longitude
                 // Fix: Properly handle optional string to satisfy CoreData strict unwrapping
                 stop.appleMapsId = item.identifier?.rawValue ?? ""
                 stop.addedByName = currentParticipantName
@@ -573,7 +624,6 @@ struct TripInputView: View {
                 stop.trip = trip
                 try? moc.save()
 
-                searchService.searchQuery = ""
                 routePlanner.orderedStops = []
                 routePlanner.legs = []
             }
@@ -676,7 +726,7 @@ struct TripInputView: View {
             Section {
                 routeStartRow.moveDisabled(true)
 
-                ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
+                ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.element.id) { index, stop in
                     routeStopRow(index: index, stop: stop)
                 }
                 .onMove(perform: moveStops)
@@ -685,7 +735,7 @@ struct TripInputView: View {
             }
         }
         .listStyle(.plain)
-        .environment(\.editMode, .constant(.active))
+        .contentMargins(.top, 0, for: .scrollContent)
     }
 
     private var routeStartRow: some View {

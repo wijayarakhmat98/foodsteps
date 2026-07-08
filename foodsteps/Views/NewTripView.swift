@@ -1,4 +1,5 @@
 import CoreData
+import MapKit
 import SwiftUI
 
 struct NewTripView: View {
@@ -10,6 +11,15 @@ struct NewTripView: View {
     @State private var startTime = Date()
     @State private var endTime = Date()
 
+    // Meeting point (held locally until the trip is saved).
+    @State private var searchService = LocationSearchService()
+    @State private var isPickingMeetingPoint = false
+    @State private var meetingPointName = ""
+    @State private var meetingPointAddress: String?
+    @State private var meetingPointAppleMapsId: String?
+    @State private var meetingPointLatitude: Double = 0
+    @State private var meetingPointLongitude: Double = 0
+
     var body: some View {
         NavigationStack {
             Form {
@@ -17,8 +27,18 @@ struct NewTripView: View {
                     TextField("Provide a trip name", text: $name)
                 }
                 Section("Meeting Point") {
-                    TextField("Set a meeting point", text: .constant(""))
-                        .disabled(true)
+                    Button {
+                        isPickingMeetingPoint = true
+                    } label: {
+                        HStack {
+                            Text(meetingPointName.isEmpty ? "Set a meeting point" : meetingPointName)
+                                .foregroundColor(meetingPointName.isEmpty ? .secondary : .primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 Section("Time") {
                     DatePicker("From", selection: $startTime, displayedComponents: [.hourAndMinute])
@@ -45,11 +65,87 @@ struct NewTripView: View {
                         newTrip.name = name.isEmpty ? "New Trip" : name
                         newTrip.start = combineDateAndTime(date: date, time: startTime)
                         newTrip.end = combineDateAndTime(date: date, time: endTime)
+
+                        if !meetingPointName.isEmpty {
+                            newTrip.meetingPointName = meetingPointName
+                            newTrip.meetingPointAddress = meetingPointAddress
+                            newTrip.meetingPointAppleMapsId = meetingPointAppleMapsId
+                            newTrip.meetingPointLatitude = meetingPointLatitude
+                            newTrip.meetingPointLongitude = meetingPointLongitude
+                        }
+
                         try? moc.save()
                         dismiss()
                     }
                 }
             }
+            .sheet(isPresented: $isPickingMeetingPoint) { meetingPointPicker }
+        }
+    }
+
+    // MARK: - Meeting point picker
+
+    private var meetingPointPicker: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    TextField("Search a meeting point...", text: $searchService.searchQuery)
+                    if !searchService.searchQuery.isEmpty {
+                        Button {
+                            searchService.searchQuery = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(.regularMaterial)
+
+                List(searchService.completions, id: \.self) { completion in
+                    Button {
+                        selectMeetingPoint(from: completion)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(completion.title).font(.headline)
+                            Text(completion.subtitle).font(.subheadline).foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .listStyle(.plain)
+            }
+            .navigationTitle("Meeting Point")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        searchService.searchQuery = ""
+                        isPickingMeetingPoint = false
+                    }
+                }
+            }
+            // Meeting point isn't food-specific — search everything, not just restaurants.
+            .onAppear { searchService.configure(for: .anyPlace) }
+        }
+    }
+
+    private func selectMeetingPoint(from completion: MKLocalSearchCompletion) {
+        let request = MKLocalSearch.Request(completion: completion)
+        Task {
+            let search = MKLocalSearch(request: request)
+            if let response = try? await search.start(), let item = response.mapItems.first {
+                meetingPointName = item.name ?? completion.title
+                meetingPointAddress = item.placemark.title
+                meetingPointAppleMapsId = item.identifier?.rawValue
+                meetingPointLatitude = item.placemark.coordinate.latitude
+                meetingPointLongitude = item.placemark.coordinate.longitude
+            }
+
+            // Close the picker as soon as a place is chosen instead of leaving it open.
+            searchService.searchQuery = ""
+            isPickingMeetingPoint = false
         }
     }
 
