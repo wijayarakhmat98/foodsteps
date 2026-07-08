@@ -3,7 +3,7 @@ import MapKit
 
 struct ActiveRouteView: View {
 
-    var trip: Trip
+    @ObservedObject var trip: Trip
     var routePlanner: RoutePlanner
     var locationManager: LocationManager
 
