@@ -55,10 +55,8 @@ struct TripInputView: View {
     @State private var mapPosition: MapCameraPosition = .automatic
 
     @State private var navigateToNavigation = false
-
-    init(trip: Trip) {
-        self.trip = trip
-    }
+    
+    @State private var showShareView = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -156,6 +154,12 @@ struct TripInputView: View {
         .onChange(of: trip.meetingPointLongitude) { _, _ in
             fitMapPreview()
         }
+        .sheet(isPresented: $showShareView) {
+            ShareView(share: trip.share!)
+                .onDisappear {
+                    moc.refresh(trip, mergeChanges: true)
+                }
+        }
     }
 
     // MARK: - Tab switcher
@@ -204,13 +208,26 @@ struct TripInputView: View {
                 ForEach(participants, id: \.objectID) { participant in
                     avatarCircle(for: participant.name ?? "?")
                 }
-                ShareLink(item: trip, preview: SharePreview("Share thiss Trip")) {
-                    Image(systemName: "plus")
-                        .font(.caption.bold())
-                        .foregroundColor(.secondary)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color(uiColor: .systemGray5)))
-                        .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
+                if trip.share == nil {
+                    ShareLink(item: trip, preview: SharePreview("Share thiss Trip")) {
+                        Image(systemName: "plus")
+                            .font(.caption.bold())
+                            .foregroundColor(.secondary)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(Color(uiColor: .systemGray5)))
+                            .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
+                    }
+                } else {
+                    Button {
+                        showShareView.toggle()
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.caption.bold())
+                            .foregroundColor(.secondary)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(Color(uiColor: .systemGray5)))
+                            .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
+                    }
                 }
             }
             Text("\(participants.count) \(participants.count == 1 ? "Person" : "People") Joined")

@@ -5,6 +5,12 @@ import CoreTransferable
 import CloudKit
 import CoreData
 
+extension Trip {
+    var share: CKShare? {
+        try? dataController.container.fetchShares(matching: [self.objectID]).first?.value
+    }
+}
+
 extension Trip: Transferable {
     public static var transferRepresentation: some TransferRepresentation {
         let container = dataController.container
