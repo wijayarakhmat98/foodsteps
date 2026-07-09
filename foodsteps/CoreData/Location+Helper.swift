@@ -48,10 +48,26 @@ extension Location {
     }
     
     func toMapItem() -> MKMapItem {
-        let location = CLLocation(latitude: latitude, longitude: longitude)
-        let item = MKMapItem(location: location, address: nil)
-        return item
-    }
+            let location = CLLocation(latitude: latitude, longitude: longitude)
+            
+            // 1. Reconstruct the MKAddress if a valid address string exists
+            var mapAddress: MKAddress? = nil
+            if let savedAddress = address { // using the optional avoids forcing "Unknown Address" into Maps
+                mapAddress = MKAddress(fullAddress: savedAddress, shortAddress: nil)
+            }
+            
+            // 2. Initialize using the modern iOS 18+ API
+            let item = MKMapItem(location: location, address: mapAddress)
+            
+            // 3. Reattach your saved metadata
+            item.name = wrappedName
+            
+            if let savedCategory = category {
+                item.pointOfInterestCategory = MKPointOfInterestCategory(rawValue: savedCategory)
+            }
+            
+            return item
+        }
     
     func toRouteStop() -> RouteStop {
         let identifier = wrappedID.uuidString

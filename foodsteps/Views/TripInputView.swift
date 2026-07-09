@@ -7,22 +7,38 @@ private enum HubTab: String, CaseIterable {
     case route = "Route"
 }
 
+/// Stop no longer stores who added it (addedByName was dropped from the
+/// schema). Literal placeholder until a real attribution field exists.
+private let placeholderAddedByName = "You"
+
 struct TripInputView: View {
     @ObservedObject var trip: Trip
 
     @Environment(\.managedObjectContext) private var moc
 
     // MARK: - Core Data Propagation
-    // Replaced @FetchRequest with computed properties straight from the ObservedObject
+    // Replaced @FetchRequest with computed properties straight from the ObservedObject.
+    // Trip+Helper already exposes wrappedStops (all stops, sorted by createdAt),
+    // so we don't need to redo that lookup/sort here.
     private var stops: [Stop] {
-        let stopSet = trip.stops as? Set<Stop> ?? []
-        return stopSet.sorted { ($0.createdAt ?? Date()) < ($1.createdAt ?? Date()) }
+        trip.wrappedStops
+    }
+
+    /// The meeting-point Stop (type == .meetingPoint), if one has been set.
+    /// Trip no longer exposes meetingPointStop/meetingPointName directly —
+    /// only wrappedStops and a meetingPointCoordinate (CLLocation) — so the
+    /// display name is derived here from the Stop's Location.
+    private var meetingPointStop: Stop? {
+        stops.first { $0.type == StopType.meetingPoint.rawValue }
+    }
+
+    private var meetingPointDisplayName: String? {
+        meetingPointStop?.location?.name
     }
     
-    private var participants: [Participant] {
-        let participantSet = trip.participants as? Set<Participant> ?? []
-        return participantSet.sorted { ($0.name ?? "") < ($1.name ?? "") }
-    }
+    // Participant entity no longer exists in the schema. Track names locally
+    // (in-memory only, not persisted) until a replacement is designed.
+    @State private var participantNames: [String] = ["You"]
 
     @State private var locationManager = LocationManager()
     @State private var routePlanner = RoutePlanner()
@@ -138,7 +154,6 @@ struct TripInputView: View {
         }
         .onAppear {
             locationManager.requestPermissionAndStart()
-            ensureDefaultParticipant()
         }
         .onChange(of: selectedTab) { _, newValue in
             if newValue == .route, routePlanner.orderedStops.isEmpty, !stops.isEmpty {
@@ -146,12 +161,6 @@ struct TripInputView: View {
             }
         }
         .onChange(of: routePlanner.orderedStops.count) { _, _ in
-            fitMapPreview()
-        }
-        .onChange(of: trip.meetingPointLatitude) { _, _ in
-            fitMapPreview()
-        }
-        .onChange(of: trip.meetingPointLongitude) { _, _ in
             fitMapPreview()
         }
         .sheet(isPresented: $showShareView) {
@@ -205,8 +214,8 @@ struct TripInputView: View {
     private var peopleJoinedSection: some View {
         VStack(spacing: 8) {
             HStack(spacing: -10) {
-                ForEach(participants, id: \.objectID) { participant in
-                    avatarCircle(for: participant.name ?? "?")
+                ForEach(participantNames, id: \.self) { name in
+                    avatarCircle(for: name)
                 }
                 if trip.share == nil {
                     ShareLink(item: trip, preview: SharePreview("Share thiss Trip")) {
@@ -230,7 +239,7 @@ struct TripInputView: View {
                     }
                 }
             }
-            Text("\(participants.count) \(participants.count == 1 ? "Person" : "People") Joined")
+            Text("\(participantNames.count) \(participantNames.count == 1 ? "Person" : "People") Joined")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -265,34 +274,17 @@ struct TripInputView: View {
         }
     }
 
-    private func ensureDefaultParticipant() {
-        if participants.isEmpty {
-            let person = Participant(context: moc)
-            person.id = UUID()
-            person.name = "You"
-            person.trip = trip
-            try? moc.save()
-            currentParticipantName = "You"
-        } else if !participants.contains(where: { $0.name == currentParticipantName }) {
-            currentParticipantName = participants.first?.name ?? "You"
-        }
-    }
-
     private func addParticipant() {
         let trimmed = newParticipantName.trimmingCharacters(in: .whitespacesAndNewlines)
         newParticipantName = ""
-        guard !trimmed.isEmpty, !participants.contains(where: { $0.name == trimmed }) else { return }
-        let person = Participant(context: moc)
-        person.id = UUID()
-        person.name = trimmed
-        person.trip = trip
-        try? moc.save()
+        guard !trimmed.isEmpty, !participantNames.contains(trimmed) else { return }
+        participantNames.append(trimmed)
         currentParticipantName = trimmed
     }
 
     private var scheduleRow: some View {
         HStack {
-            if let start = trip.start, let end = trip.end {
+            if let start = trip.scheduledStart, let end = trip.scheduledEnd {
                 Text(scheduleLabel(start: start, end: end))
                     .font(.subheadline)
             } else {
@@ -302,8 +294,8 @@ struct TripInputView: View {
             }
             Spacer()
             Button("Edit") {
-                draftStart = trip.start ?? Date()
-                draftEnd = trip.end ?? Date().addingTimeInterval(4 * 3600)
+                draftStart = trip.scheduledStart ?? Date()
+                draftEnd = trip.scheduledEnd ?? Date().addingTimeInterval(4 * 3600)
                 isEditingSchedule = true
             }
             .font(.subheadline.weight(.semibold))
@@ -334,8 +326,8 @@ struct TripInputView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        trip.start = draftStart
-                        trip.end = draftEnd
+                        trip.scheduledStart = draftStart
+                        trip.scheduledEnd = draftEnd
                         try? moc.save()
                         isEditingSchedule = false
                     }
@@ -350,7 +342,7 @@ struct TripInputView: View {
                 Text("Meeting point")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Text(trip.meetingPointName ?? "Not set")
+                Text(meetingPointDisplayName ?? "Not set")
                     .font(.subheadline)
             }
             Spacer()
@@ -413,11 +405,19 @@ struct TripInputView: View {
             if let response = try? await search.start(),
                let item = response.mapItems.first {
 
-                trip.meetingPointName = item.name
-                trip.meetingPointAddress = item.placemark.title
-                trip.meetingPointAppleMapsId = item.identifier?.rawValue
-                trip.meetingPointLatitude = item.placemark.coordinate.latitude
-                trip.meetingPointLongitude = item.placemark.coordinate.longitude
+                // meetingPointAppleMapsId isn't stored yet — Location doesn't
+                // have a field for it in the current schema.
+                if let existingStop = meetingPointStop {
+                    let location = existingStop.location ?? Location.insert(into: moc, mapItem: item)
+                    location.name = item.name
+                    location.address = item.placemark.title
+                    location.latitude = item.placemark.coordinate.latitude
+                    location.longitude = item.placemark.coordinate.longitude
+                    existingStop.location = location
+                } else {
+                    let location = Location.insert(into: moc, mapItem: item)
+                    Stop.insert(into: moc, trip: trip, type: .meetingPoint, location: location)
+                }
 
                 try? moc.save()
 
@@ -427,6 +427,7 @@ struct TripInputView: View {
                 // Reset existing route
                 routePlanner.orderedStops.removeAll()
                 routePlanner.legs.removeAll()
+                fitMapPreview()
 
                 // Recalculate immediately if there are stops
                 if !stops.isEmpty {
@@ -492,13 +493,15 @@ struct TripInputView: View {
     private func placeRow(stop: Stop) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(stop.name ?? "Unknown")
+                Text(stop.location?.name ?? "Unknown")
                     .font(.headline)
-                Text(stop.address ?? "")
+                Text(stop.location?.address ?? "")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
-                Text(stop.addedByName ?? "")
+                // addedByName has no backing field anymore (Stop/Location
+                // dropped it) — literal placeholder until reintroduced.
+                Text(placeholderAddedByName)
                     .font(.caption2.weight(.medium))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 8)
@@ -511,8 +514,8 @@ struct TripInputView: View {
                 toggleVote(for: stop)
             } label: {
                 VStack(spacing: 2) {
-                    Image(systemName: stop.votedBySet.contains(currentParticipantName) ? "heart.fill" : "heart")
-                        .foregroundColor(stop.votedBySet.contains(currentParticipantName) ? .red : .secondary)
+                    Image(systemName: hasVoted(on: stop) ? "heart.fill" : "heart")
+                        .foregroundColor(hasVoted(on: stop) ? .red : .secondary)
                     Text("\(stop.hearts)")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -523,14 +526,24 @@ struct TripInputView: View {
         .padding(.vertical, 6)
     }
 
+    /// Vote model has no hasVoted/toggleVote convenience — those were on the
+    /// old Stop entity and don't exist in the current schema/helpers. Voting
+    /// is expressed purely through the `votes` relationship (one Vote per
+    /// authorRecordName) plus Vote.insert(into:stop:) from Vote+Helper.
+    private func hasVoted(on stop: Stop) -> Bool {
+        guard let recordName = dataController.currentUserRecordName else { return false }
+        let votes = stop.votes as? Set<Vote> ?? []
+        return votes.contains { $0.authorRecordName == recordName }
+    }
+
     private func toggleVote(for stop: Stop) {
-        var voters = stop.votedBySet
-        if voters.contains(currentParticipantName) {
-            voters.remove(currentParticipantName)
+        guard let recordName = dataController.currentUserRecordName else { return }
+        let votes = stop.votes as? Set<Vote> ?? []
+        if let existingVote = votes.first(where: { $0.authorRecordName == recordName }) {
+            moc.delete(existingVote)
         } else {
-            voters.insert(currentParticipantName)
+            Vote.insert(into: moc, stop: stop)
         }
-        stop.votedBySet = voters
         try? moc.save()
     }
 
@@ -592,7 +605,7 @@ struct TripInputView: View {
 
     private func isAlreadyAdded(_ completion: MKLocalSearchCompletion) -> Bool {
         stops.contains { existing in
-            (existing.name ?? "").caseInsensitiveCompare(completion.title) == .orderedSame
+            (existing.location?.name ?? "").caseInsensitiveCompare(completion.title) == .orderedSame
         }
     }
 
@@ -604,15 +617,14 @@ struct TripInputView: View {
             defer { isSearching = false }
             if let response = try? await search.start(), let item = response.mapItems.first {
 
-                let candidateId = item.identifier?.rawValue
+                // appleMapsId-based dedup dropped — Location has no field for
+                // it in the current schema. Falls back to name + distance.
                 let candidateCoordinate = item.placemark.coordinate
 
                 let isDuplicate = stops.contains { existing in
-                    if let candidateId, !candidateId.isEmpty, existing.appleMapsId == candidateId {
-                        return true
-                    }
-                    let sameName = (existing.name ?? "").caseInsensitiveCompare(item.name ?? "") == .orderedSame
-                    let existingLocation = CLLocation(latitude: existing.latitude, longitude: existing.longitude)
+                    guard let existingLocationEntity = existing.location else { return false }
+                    let sameName = (existingLocationEntity.name ?? "").caseInsensitiveCompare(item.name ?? "") == .orderedSame
+                    let existingLocation = CLLocation(latitude: existingLocationEntity.latitude, longitude: existingLocationEntity.longitude)
                     let candidateLocation = CLLocation(latitude: candidateCoordinate.latitude, longitude: candidateCoordinate.longitude)
                     return sameName && existingLocation.distance(from: candidateLocation) < 25
                 }
@@ -626,17 +638,8 @@ struct TripInputView: View {
                     return
                 }
 
-                let stop = Stop(context: moc)
-                stop.id = UUID()
-                stop.name = item.name
-                stop.address = item.placemark.title
-                stop.latitude = candidateCoordinate.latitude
-                stop.longitude = candidateCoordinate.longitude
-                stop.appleMapsId = item.identifier?.rawValue ?? ""
-                stop.addedByName = currentParticipantName
-                stop.createdAt = Date()
-                stop.category = categoryLabel(for: item.pointOfInterestCategory)
-                stop.trip = trip
+                let location = Location.insert(into: moc, mapItem: item)
+                Stop.insert(into: moc, trip: trip, type: .stop, location: location)
                 try? moc.save()
 
                 routePlanner.orderedStops = []
@@ -677,8 +680,8 @@ struct TripInputView: View {
         Map(position: $mapPosition, interactionModes: [.pan, .zoom]) {
             UserAnnotation()
 
-            if let start = trip.meetingPointCoordinate ?? locationManager.currentLocation {
-                Annotation(trip.meetingPointName ?? "Start", coordinate: start) {
+            if let start = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation {
+                Annotation(meetingPointDisplayName ?? "Start", coordinate: start) {
                     ZStack {
                         Circle().fill(Color.black).frame(width: 28, height: 28)
                         Image(systemName: "mappin")
@@ -753,7 +756,7 @@ struct TripInputView: View {
                 Image(systemName: "mappin").font(.caption.bold()).foregroundColor(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(trip.meetingPointName ?? "Your Location")
+                Text(meetingPointDisplayName ?? "Your Location")
                     .font(.subheadline.weight(.semibold))
                 Text("Start")
                     .font(.caption)
@@ -793,7 +796,7 @@ struct TripInputView: View {
 
         let fromCoordinate: CLLocationCoordinate2D
         if index == 0 {
-            guard let start = trip.meetingPointCoordinate ?? locationManager.currentLocation else { return "" }
+            guard let start = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation else { return "" }
             fromCoordinate = start
         } else {
             fromCoordinate = orderedStops[index - 1].mapItem.placemark.coordinate
@@ -824,7 +827,7 @@ struct TripInputView: View {
 
     private func fitMapPreview() {
         var coordinates = routePlanner.orderedStops.map { $0.mapItem.placemark.coordinate }
-        if let start = trip.meetingPointCoordinate ?? locationManager.currentLocation {
+        if let start = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation {
             coordinates.append(start)
         }
         guard let first = coordinates.first else { return }
@@ -881,17 +884,22 @@ struct TripInputView: View {
     }
 
     private func computeRoute(completion: @escaping () -> Void) {
-        isPreparingRoute = true
-        routePlanner.stops = stops.map { $0.toRouteStop() }
-        
-        let start = trip.meetingPointCoordinate ?? locationManager.currentLocation ?? CLLocationCoordinate2D(latitude: -6.3000, longitude: 106.4000)
-        
-        Task {
-            await routePlanner.optimizeAndCalculate(from: start)
-            isPreparingRoute = false
-            completion()
+            isPreparingRoute = true
+            
+            // Map the CoreData Stop entities directly into RouteStops inline
+            routePlanner.stops = stops.compactMap { stop in
+                guard let location = stop.location, let id = stop.id else { return nil }
+                return RouteStop(id: id.uuidString, mapItem: location.toMapItem())
+            }
+            
+            let start = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation ?? CLLocationCoordinate2D(latitude: -6.3000, longitude: 106.4000)
+            
+            Task {
+                await routePlanner.optimizeAndCalculate(from: start)
+                isPreparingRoute = false
+                completion()
+            }
         }
-    }
 
     // MARK: - Trip finished
 
@@ -902,17 +910,9 @@ struct TripInputView: View {
     }
 
     private func saveTripResult() {
-        for (index, stop) in finishedStopEntities.enumerated() {
-            if let window = routePlanner.visitedWindow(at: index) {
-                stop.visitedAt = window.start
-                stop.departedAt = window.end
-            }
-        }
-
-        trip.finishedAt = routePlanner.finishedAt ?? Date()
-
-        try? moc.save()
-
+        // Stop.visitedAt/departedAt and Trip.finishedAt no longer exist in
+        // the schema. Visit timing stays ephemeral in RoutePlanner for now
+        // (TripFinishedView already reads it from there).
         routePlanner.isFinished = false
         navigateToNavigation = false
     }

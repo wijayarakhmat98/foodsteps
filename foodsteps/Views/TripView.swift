@@ -3,7 +3,7 @@ import SwiftUI
 
 struct TripView: View {
     @Environment(\.managedObjectContext) private var moc
-    @FetchRequest(sortDescriptors: [SortDescriptor(\.created, order: .reverse)])
+    @FetchRequest(sortDescriptors: [SortDescriptor(\.createdAt, order: .reverse)])
     private var trips: FetchedResults<Trip>
 
     @State private var showNewTrip = false

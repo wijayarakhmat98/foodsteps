@@ -12,13 +12,13 @@ struct NewTripView: View {
     @State private var endTime = Date()
 
     // Meeting point (held locally until the trip is saved).
+    // Keeping the MKMapItem itself (rather than copying out individual
+    // fields) lets us hand it straight to Location.insert(into:mapItem:)
+    // from Location+Helper when the trip is saved.
     @State private var searchService = LocationSearchService()
     @State private var isPickingMeetingPoint = false
-    @State private var meetingPointName = ""
-    @State private var meetingPointAddress: String?
-    @State private var meetingPointAppleMapsId: String?
-    @State private var meetingPointLatitude: Double = 0
-    @State private var meetingPointLongitude: Double = 0
+    @State private var meetingPointMapItem: MKMapItem?
+    @State private var meetingPointDisplayName = ""
 
     var body: some View {
         NavigationStack {
@@ -31,8 +31,8 @@ struct NewTripView: View {
                         isPickingMeetingPoint = true
                     } label: {
                         HStack {
-                            Text(meetingPointName.isEmpty ? "Set a meeting point" : meetingPointName)
-                                .foregroundColor(meetingPointName.isEmpty ? .secondary : .primary)
+                            Text(meetingPointDisplayName.isEmpty ? "Set a meeting point" : meetingPointDisplayName)
+                                .foregroundColor(meetingPointDisplayName.isEmpty ? .secondary : .primary)
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption)
@@ -59,19 +59,16 @@ struct NewTripView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        let newTrip = Trip(context: moc)
-                        newTrip.id = UUID()
-                        newTrip.created = Date()
-                        newTrip.name = name.isEmpty ? "New Trip" : name
-                        newTrip.start = combineDateAndTime(date: date, time: startTime)
-                        newTrip.end = combineDateAndTime(date: date, time: endTime)
+                        let newTrip = Trip.insert(
+                            into: moc,
+                            name: name.isEmpty ? "New Trip" : name,
+                            scheduleStart: combineDateAndTime(date: date, time: startTime),
+                            scheduledEnd: combineDateAndTime(date: date, time: endTime)
+                        )
 
-                        if !meetingPointName.isEmpty {
-                            newTrip.meetingPointName = meetingPointName
-                            newTrip.meetingPointAddress = meetingPointAddress
-                            newTrip.meetingPointAppleMapsId = meetingPointAppleMapsId
-                            newTrip.meetingPointLatitude = meetingPointLatitude
-                            newTrip.meetingPointLongitude = meetingPointLongitude
+                        if let mapItem = meetingPointMapItem {
+                            let location = Location.insert(into: moc, mapItem: mapItem)
+                            Stop.insert(into: moc, trip: newTrip, type: .meetingPoint, location: location)
                         }
 
                         try? moc.save()
@@ -136,11 +133,8 @@ struct NewTripView: View {
         Task {
             let search = MKLocalSearch(request: request)
             if let response = try? await search.start(), let item = response.mapItems.first {
-                meetingPointName = item.name ?? completion.title
-                meetingPointAddress = item.placemark.title
-                meetingPointAppleMapsId = item.identifier?.rawValue
-                meetingPointLatitude = item.placemark.coordinate.latitude
-                meetingPointLongitude = item.placemark.coordinate.longitude
+                meetingPointMapItem = item
+                meetingPointDisplayName = item.name ?? completion.title
             }
 
             // Close the picker as soon as a place is chosen instead of leaving it open.

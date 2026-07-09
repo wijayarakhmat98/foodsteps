@@ -84,13 +84,23 @@ struct TripFinishedView: View {
 
     // MARK: - Header
 
+    /// `Stop` no longer carries name/lat/long directly — those now live on
+    /// its `Location` relationship. Stops without a Location (shouldn't
+    /// normally happen for visited stops) are skipped on the map.
+    private var visitedStopAnnotations: [(index: Int, name: String, coordinate: CLLocationCoordinate2D)] {
+        visitedStops.enumerated().compactMap { index, stop in
+            guard let location = stop.location else { return nil }
+            return (index, location.name ?? "Stop", CLLocationCoordinate2D(latitude: location.latitude, longitude: location.longitude))
+        }
+    }
+
     private var mapHeader: some View {
         Map(position: $mapPosition, interactionModes: [.pan, .zoom]) {
-            ForEach(Array(visitedStops.enumerated()), id: \.offset) { index, stop in
-                Annotation(stop.name ?? "Stop", coordinate: CLLocationCoordinate2D(latitude: stop.latitude, longitude: stop.longitude)) {
+            ForEach(visitedStopAnnotations, id: \.index) { item in
+                Annotation(item.name, coordinate: item.coordinate) {
                     ZStack {
                         Circle().fill(Color.orange).frame(width: 22, height: 22)
-                        Text("\(index + 1)")
+                        Text("\(item.index + 1)")
                             .font(.caption2.bold())
                             .foregroundColor(.white)
                     }
@@ -155,7 +165,7 @@ struct TripFinishedView: View {
             ForEach(Array(visitedStops.enumerated()), id: \.offset) { index, stop in
                 StopTimelineRow(
                     index: index,
-                    title: stop.name ?? "Unknown place",
+                    title: stop.location?.name ?? "Unknown place",
                     subtitle: subtitle(for: stop, at: index),
                     isLast: index == visitedStops.count - 1
                 )
@@ -165,7 +175,7 @@ struct TripFinishedView: View {
 
     private func subtitle(for stop: Stop, at index: Int) -> String {
         var parts: [String] = []
-        if let category = stop.category {
+        if let category = stop.location?.category {
             parts.append(category)
         }
         if let window = routePlanner.visitedWindow(at: index) {
@@ -183,7 +193,9 @@ struct TripFinishedView: View {
     private func formattedTripDate() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMMM yyyy"
-        let date = routePlanner.finishedAt ?? trip.finishedAt ?? Date()
+        // Trip.finishedAt no longer exists in the schema; this timing is
+        // ephemeral (RoutePlanner) until finish state is persisted again.
+        let date = routePlanner.finishedAt ?? Date()
         return formatter.string(from: date)
     }
 
@@ -217,7 +229,7 @@ struct TripFinishedView: View {
     // MARK: - Helpers
 
     private func fitMap() {
-        let coordinates = visitedStops.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+        let coordinates = visitedStopAnnotations.map { $0.coordinate }
         guard let first = coordinates.first else { return }
 
         var minLat = first.latitude, maxLat = first.latitude
@@ -237,25 +249,11 @@ struct TripFinishedView: View {
         mapPosition = .region(MKCoordinateRegion(center: center, span: span))
     }
 
-    /// Counts stops from this trip whose Apple Maps place id hasn't shown up
-    /// in any previously *finished* trip — i.e. genuinely new discoveries.
+    /// Counts stops from this trip that are genuinely new discoveries.
+    /// TODO: Trip.finishedAt and a place-identity field (like the old
+    /// appleMapsId) no longer exist in the schema, so this can't be computed
+    /// from Core Data yet. Stubbed to 0 until those are reintroduced.
     private func computeNewPlacesCount() {
-        let request: NSFetchRequest<Stop> = Stop.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "trip != %@ AND trip.finishedAt != nil AND appleMapsId != nil AND appleMapsId != ''",
-            trip
-        )
-
-        let previouslyVisitedIds: Set<String>
-        if let results = try? moc.fetch(request) {
-            previouslyVisitedIds = Set(results.compactMap { $0.appleMapsId })
-        } else {
-            previouslyVisitedIds = []
-        }
-
-        newPlacesCount = visitedStops.filter { stop in
-            guard let id = stop.appleMapsId, !id.isEmpty else { return true }
-            return !previouslyVisitedIds.contains(id)
-        }.count
+        newPlacesCount = 0
     }
 }

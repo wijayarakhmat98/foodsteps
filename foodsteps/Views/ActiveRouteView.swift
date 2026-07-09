@@ -20,6 +20,18 @@ struct ActiveRouteView: View {
     private let minSheetHeight: CGFloat = 170
     private let handleAreaHeight: CGFloat = 28
 
+    // MARK: - Meeting point
+    // Trip no longer carries a meetingPointName, and meetingPointCoordinate
+    // is a CLLocation (not CLLocationCoordinate2D), so we derive the display
+    // name here from the meeting-point Stop's Location.
+    private var meetingPointStop: Stop? {
+        trip.wrappedStops.first { $0.type == StopType.meetingPoint.rawValue }
+    }
+
+    private var meetingPointName: String? {
+        meetingPointStop?.location?.name
+    }
+
     var body: some View {
 
         GeometryReader { geo in
@@ -67,63 +79,38 @@ struct ActiveRouteView: View {
         .onAppear {
 
             if !routePlanner.isNavigating {
-
                 routePlanner.startNavigation()
-
             }
 
             if let stop = routePlanner.currentNavigationStop {
-
                 locationManager.monitorArrival(
                     at: stop.mapItem.placemark.coordinate,
                     identifier: stop.name
                 )
-
             }
 
             updateCamera()
 
             locationManager.onLocationUpdate = { _ in
-
                 DispatchQueue.main.async {
-
-                    routePlanner.updateNavigation(
-                        using: locationManager
-                    )
-
+                    routePlanner.updateNavigation(using: locationManager)
                     updateCamera()
-
                 }
-
             }
 
             locationManager.onRegionEntered = { _ in
-
                 DispatchQueue.main.async {
-
-                    routePlanner.updateNavigation(
-                        using: locationManager
-                    )
-
+                    routePlanner.updateNavigation(using: locationManager)
                     updateCamera()
-
                 }
-
             }
-
         }
-
         .onDisappear {
-
             locationManager.onLocationUpdate = nil
             locationManager.onRegionEntered = nil
-
         }
-
         .onChange(of: routePlanner.currentLegIndex) { _, _ in
-
             updateCamera()
-
         }
 
     }
@@ -136,15 +123,12 @@ struct ActiveRouteView: View {
             UserAnnotation()
 
             if let route = routePlanner.currentNavigationLeg {
-
                 MapPolyline(route)
                     .stroke(Color.brandPurple, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
-
             }
 
             if let start = trip.meetingPointCoordinate {
-
-                Annotation(trip.meetingPointName ?? "Start", coordinate: start) {
+                Annotation(meetingPointName ?? "Start", coordinate: start.coordinate) {
                     ZStack {
                         Circle().fill(Color.black).frame(width: 24, height: 24)
                         Image(systemName: "flag.fill")
@@ -153,11 +137,9 @@ struct ActiveRouteView: View {
                     }
                     .shadow(radius: 2)
                 }
-
             }
 
             ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
-
                 Annotation(stop.name, coordinate: stop.mapItem.placemark.coordinate) {
                     ZStack {
                         Circle().fill(Color.brandPurple).frame(width: 24, height: 24)
@@ -167,7 +149,6 @@ struct ActiveRouteView: View {
                     }
                     .shadow(radius: 2)
                 }
-
             }
 
         }
@@ -279,13 +260,13 @@ struct ActiveRouteView: View {
                 if let start = trip.meetingPointCoordinate {
                     StopTimelineRow(
                         index: -1,
-                        title: trip.meetingPointName ?? "Your Location",
+                        title: meetingPointName ?? "Your Location",
                         subtitle: "Meeting Point | Start",
                         isLast: routePlanner.orderedStops.isEmpty,
                         placeholderSystemImage: "mappin.and.ellipse",
                         badgeSystemImage: "flag.fill"
                     )
-                    .id(start.latitude)
+                    .id(start.coordinate.latitude)
                 }
 
                 ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
@@ -334,7 +315,6 @@ struct ActiveRouteView: View {
         HStack(spacing: 12) {
 
             if routePlanner.isPaused {
-
                 Button {
                     routePlanner.resumeNavigation()
                 } label: {
@@ -346,9 +326,7 @@ struct ActiveRouteView: View {
                         .background(Color.brandPurple)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
-
             } else {
-
                 Button {
                     routePlanner.pauseNavigation()
                 } label: {
@@ -360,7 +338,6 @@ struct ActiveRouteView: View {
                         .background(Color.orange)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
-
             }
 
             Button {
@@ -383,23 +360,36 @@ struct ActiveRouteView: View {
     }
 
     private func finishTrip() {
-
         while routePlanner.advanceToNextStop() {
-
             if let next = routePlanner.currentNavigationStop {
-
                 locationManager.monitorArrival(
                     at: next.mapItem.placemark.coordinate,
                     identifier: next.name
                 )
-
             }
-
         }
-
     }
 
     // MARK: - Helpers
+    
+    /// Parses the raw MKPointOfInterestCategory into a readable string (e.g., "MKPOICategoryRestaurant" -> "Restaurant")
+    private func categoryLabel(for category: MKPointOfInterestCategory?) -> String? {
+        guard let category = category else { return nil }
+        
+        // Remove the "MKPOICategory" prefix to get a clean UI string
+        let rawString = category.rawValue
+        let cleanString = rawString.replacingOccurrences(of: "MKPOICategory", with: "")
+        
+        // Add spaces before capital letters for camel case categories like "NationalPark" -> "National Park"
+        let readableString = cleanString.replacingOccurrences(
+            of: "([A-Z])",
+            with: " $1",
+            options: .regularExpression,
+            range: cleanString.startIndex..<cleanString.endIndex
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        return readableString.isEmpty ? nil : readableString
+    }
 
     private func remainingStopsCount() -> Int {
         max(routePlanner.orderedStops.count - routePlanner.currentLegIndex, 0)
@@ -413,27 +403,17 @@ struct ActiveRouteView: View {
     }
 
     private func updateCamera() {
-
         guard followUser else { return }
-
         guard let location = locationManager.currentLocation else { return }
 
         mapPosition = .camera(
-
             MapCamera(
-
                 centerCoordinate: location,
-
                 distance: 700,
-
                 heading: 0,
-
                 pitch: 60
-
             )
-
         )
-
     }
 
 }
