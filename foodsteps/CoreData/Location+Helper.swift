@@ -35,6 +35,14 @@ extension Location {
         createdAt ?? erroneousCreatedAt
     }
     
+    var wrappedAuthorName: String {
+        super.wrappedAuthorName(authorRecordName)
+    }
+    
+    var wrappedAuthorInitials: String {
+        super.wrappedAuthorInitials(authorRecordName)
+    }
+    
     var wrappedName: String {
         name ?? erroneousName
     }

@@ -26,4 +26,12 @@ extension Vote {
     var wrappedCreatedAt: Date {
         createdAt ?? erroneousCreatedAt
     }
+    
+    var wrappedAuthorName: String {
+        super.wrappedAuthorName(authorRecordName)
+    }
+    
+    var wrappedAuthorInitials: String {
+        super.wrappedAuthorInitials(authorRecordName)
+    }
 }

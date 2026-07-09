@@ -37,6 +37,14 @@ extension Trip {
         createdAt ?? erroneousCreatedAt
     }
     
+    var wrappedAuthorName: String {
+        super.wrappedAuthorName(authorRecordName)
+    }
+    
+    var wrappedAuthorInitials: String {
+        super.wrappedAuthorInitials(authorRecordName)
+    }
+    
     var wrappedStops: [Stop] {
         (stops as? Set<Stop> ?? erroneousStops).sorted {
             $0.wrappedCreatedAt < $1.wrappedCreatedAt

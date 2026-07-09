@@ -38,6 +38,15 @@ extension Stop {
         createdAt ?? erroneousCreatedAt
     }
     
+    
+    var wrappedAuthorName: String {
+        super.wrappedAuthorName(authorRecordName)
+    }
+    
+    var wrappedAuthorInitials: String {
+        super.wrappedAuthorInitials(authorRecordName)
+    }
+    
     var hearts: Int {
         votes?.count ?? 0
     }
