@@ -3,6 +3,8 @@ import MapKit
 
 private let erroneousID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
 private let erroneousCreatedAt = Date(timeIntervalSinceReferenceDate: 0)
+private let erroneousName = "Unknown Location"
+private let erroneousAddress = "Unknown Address"
 
 extension Location {
     @discardableResult
@@ -30,6 +32,14 @@ extension Location {
     
     var wrappedCreatedAt: Date {
         createdAt ?? erroneousCreatedAt
+    }
+    
+    var wrappedName: String {
+        name ?? erroneousName
+    }
+    
+    var wrappedAddress: String {
+        address ?? erroneousAddress
     }
     
     func toMapItem() -> MKMapItem {

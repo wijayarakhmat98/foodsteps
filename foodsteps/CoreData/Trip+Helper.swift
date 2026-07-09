@@ -5,6 +5,9 @@ import CoreTransferable
 private let erroneousID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
 private let erroneousCreatedAt = Date(timeIntervalSinceReferenceDate: 0)
 private let erroneousStops: Set<Stop> = []
+private let erroneousName = "Untitled"
+private let erroneousScheduledStart = Date(timeIntervalSinceReferenceDate: 0)
+private let erroneousScheduledEnd = Date(timeIntervalSinceReferenceDate: 0)
 
 extension Trip {
     @discardableResult
@@ -38,6 +41,18 @@ extension Trip {
         (stops as? Set<Stop> ?? erroneousStops).sorted {
             $0.wrappedCreatedAt < $1.wrappedCreatedAt
         }
+    }
+    
+    var wrappedName: String {
+        name ?? erroneousName
+    }
+    
+    var wrappedScheduledStart: Date {
+        scheduledStart ?? erroneousScheduledStart
+    }
+
+    var wrappedScheduledEnd: Date {
+        scheduledEnd ?? erroneousScheduledEnd
     }
     
     var meetingPointCoordinate: CLLocation? {
