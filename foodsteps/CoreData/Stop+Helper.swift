@@ -33,15 +33,5 @@ extension Stop {
 }
 
 func categoryLabel(for category: MKPointOfInterestCategory?) -> String? {
-    guard let category else { return nil }
-    switch category {
-    case .cafe:
-        return "Coffee Shop"
-    case .bakery:
-        return "Bakery"
-    case .restaurant:
-        return "Street Food"
-    default:
-        return "Restaurant"
-    }
+    return category?.rawValue
 }
