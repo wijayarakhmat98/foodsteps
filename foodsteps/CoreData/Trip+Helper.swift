@@ -2,10 +2,52 @@ import CoreData
 import CloudKit
 import CoreTransferable
 
+private let erroneousID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+private let erroneousCreatedAt = Date(timeIntervalSinceReferenceDate: 0)
+private let erroneousStops: Set<Stop> = []
+
 extension Trip {
-    var meetingPointCoordinate: CLLocationCoordinate2D? {
-        guard meetingPointLatitude != 0 || meetingPointLongitude != 0 else { return nil }
-        return CLLocationCoordinate2D(latitude: meetingPointLatitude, longitude: meetingPointLongitude)
+    @discardableResult
+    static func insert(
+        into moc: NSManagedObjectContext,
+        name: String,
+        scheduleStart: Date,
+        scheduledEnd: Date
+    )
+    -> Trip
+    {
+        let trip = Trip(context: moc)
+        trip.id = UUID()
+        trip.createdAt = Date()
+        trip.authorRecordName = dataController.currentUserRecordName
+        trip.name = name
+        trip.scheduledStart = scheduleStart
+        trip.scheduledEnd = scheduledEnd
+        return trip
+    }
+    
+    var wrappedID: UUID {
+        id ?? erroneousID
+    }
+    
+    var wrappedCreatedAt: Date {
+        createdAt ?? erroneousCreatedAt
+    }
+    
+    var wrappedStops: [Stop] {
+        (stops as? Set<Stop> ?? erroneousStops).sorted {
+            $0.wrappedCreatedAt < $1.wrappedCreatedAt
+        }
+    }
+    
+    var meetingPointCoordinate: CLLocation? {
+        guard let stop = wrappedStops.first(where: {stop in stop.type == StopType.meetingPoint.rawValue}) else {
+            return nil
+        }
+        guard let location = stop.location else {
+            return nil
+        }
+        return CLLocation(latitude: location.latitude, longitude: location.longitude)
     }
 }
 

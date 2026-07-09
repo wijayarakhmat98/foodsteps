@@ -9,7 +9,7 @@ class DataController {
         _ckContainer!
     }()
 
-    private(set) var userRecordName: String?
+    private(set) var currentUserRecordName: String?
 
     let privatePersistentStore: NSPersistentStore
     let sharedPersistentStore: NSPersistentStore
@@ -65,7 +65,7 @@ class DataController {
             Task {
                 if let userRecordName = try? await _ckContainer?.userRecordID().recordName {
                     await MainActor.run {
-                        self.userRecordName = userRecordName
+                        self.currentUserRecordName = userRecordName
                     }
                 } else {
                     fatalError("Unable to determine current user")
