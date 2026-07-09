@@ -7,10 +7,6 @@ private enum HubTab: String, CaseIterable {
     case route = "Route"
 }
 
-/// Stop no longer stores who added it (addedByName was dropped from the
-/// schema). Literal placeholder until a real attribution field exists.
-private let placeholderAddedByName = "You"
-
 struct TripInputView: View {
     @ObservedObject var trip: Trip
 
@@ -34,6 +30,14 @@ struct TripInputView: View {
 
     private var meetingPointDisplayName: String? {
         meetingPointStop?.location?.name
+    }
+
+    /// The actual places to visit — everything in `stops` except the
+    /// meeting point. The meeting point is where the group starts from,
+    /// not a destination, so it's tracked separately (`meetingPointStop`)
+    /// and shouldn't show up in the places list or be routed to as a stop.
+    private var placeStops: [Stop] {
+        stops.filter { $0.type != StopType.meetingPoint.rawValue }
     }
     
     // Participant entity no longer exists in the schema. Track names locally
@@ -170,7 +174,7 @@ struct TripInputView: View {
             locationManager.requestPermissionAndStart()
         }
         .onChange(of: selectedTab) { _, newValue in
-            if newValue == .route, routePlanner.orderedStops.isEmpty, !stops.isEmpty {
+            if newValue == .route, routePlanner.orderedStops.isEmpty, !placeStops.isEmpty {
                 computeRoute {}
             }
         }
@@ -444,7 +448,7 @@ struct TripInputView: View {
                 fitMapPreview()
 
                 // Recalculate immediately if there are stops
-                if !stops.isEmpty {
+                if !placeStops.isEmpty {
                     computeRoute { }
                 }
             }
@@ -474,12 +478,12 @@ struct TripInputView: View {
     }
 
     private var sortedStops: [Stop] {
-        stops.sorted { $0.hearts > $1.hearts }
+        placeStops.sorted { $0.hearts > $1.hearts }
     }
 
     @ViewBuilder
     private var placesList: some View {
-        if stops.isEmpty {
+        if placeStops.isEmpty {
             ContentUnavailableView(
                 "No Stops Yet",
                 systemImage: "mappin.and.ellipse",
@@ -513,9 +517,7 @@ struct TripInputView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
-                // addedByName has no backing field anymore (Stop/Location
-                // dropped it) — literal placeholder until reintroduced.
-                Text(placeholderAddedByName)
+                Text(stop.wrappedAuthorName)
                     .font(.caption2.weight(.medium))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 8)
@@ -665,7 +667,7 @@ struct TripInputView: View {
     // MARK: - Route tab
     @ViewBuilder
     private var routeTab: some View {
-        if stops.isEmpty {
+        if placeStops.isEmpty {
             ContentUnavailableView(
                 "Nothing to Route Yet",
                 systemImage: "map",
@@ -885,11 +887,11 @@ struct TripInputView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .padding()
         .background(.bar)
-        .disabled(stops.isEmpty || isPreparingRoute)
+        .disabled(placeStops.isEmpty || isPreparingRoute)
     }
 
     private func startTrip() {
-        guard !stops.isEmpty else { return }
+        guard !placeStops.isEmpty else { return }
         if routePlanner.orderedStops.isEmpty {
             computeRoute { navigateToNavigation = true }
         } else {
@@ -901,7 +903,7 @@ struct TripInputView: View {
             isPreparingRoute = true
             
             // Map the CoreData Stop entities directly into RouteStops inline
-            routePlanner.stops = stops.compactMap { stop in
+            routePlanner.stops = placeStops.compactMap { stop in
                 guard let location = stop.location, let id = stop.id else { return nil }
                 return RouteStop(id: id.uuidString, mapItem: location.toMapItem())
             }
