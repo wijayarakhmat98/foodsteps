@@ -40,6 +40,20 @@ struct TripInputView: View {
     // (in-memory only, not persisted) until a replacement is designed.
     @State private var participantNames: [String] = ["You"]
 
+    /// Real participants, pulled from the CKShare via the existing
+    /// NSManagedObject+Helper `userNames` helper. Falls back to the
+    /// locally-tracked names (merged in) so unshared trips, and anyone
+    /// added manually via "Add Person", still show up.
+    private var displayedParticipantNames: [String] {
+        let synced = trip.userNames
+        guard !synced.isEmpty else { return participantNames }
+        var merged = synced
+        for name in participantNames where !merged.contains(name) {
+            merged.append(name)
+        }
+        return merged
+    }
+
     @State private var locationManager = LocationManager()
     @State private var routePlanner = RoutePlanner()
     @State private var searchService = LocationSearchService()
@@ -214,7 +228,7 @@ struct TripInputView: View {
     private var peopleJoinedSection: some View {
         VStack(spacing: 8) {
             HStack(spacing: -10) {
-                ForEach(participantNames, id: \.self) { name in
+                ForEach(displayedParticipantNames, id: \.self) { name in
                     avatarCircle(for: name)
                 }
                 if trip.share == nil {
@@ -239,7 +253,7 @@ struct TripInputView: View {
                     }
                 }
             }
-            Text("\(participantNames.count) \(participantNames.count == 1 ? "Person" : "People") Joined")
+            Text("\(displayedParticipantNames.count) \(displayedParticipantNames.count == 1 ? "Person" : "People") Joined")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
