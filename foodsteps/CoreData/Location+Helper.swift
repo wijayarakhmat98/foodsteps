@@ -5,6 +5,7 @@ private let erroneousID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 private let erroneousCreatedAt = Date(timeIntervalSinceReferenceDate: 0)
 private let erroneousName = "Unknown Location"
 private let erroneousAddress = "Unknown Address"
+private let erroneousCategory = "Unknown Category"
 
 extension Location {
     @discardableResult
@@ -40,6 +41,10 @@ extension Location {
     
     var wrappedAddress: String {
         address ?? erroneousAddress
+    }
+    
+    var wrappedCategory: String {
+        category ?? erroneousCategory
     }
     
     func toMapItem() -> MKMapItem {
