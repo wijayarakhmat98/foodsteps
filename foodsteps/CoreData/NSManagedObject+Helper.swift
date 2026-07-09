@@ -17,7 +17,18 @@ extension NSManagedObject {
     }
     
     var userNames: [String] {
-        userIdentities.map { $0.wrappedName }
+        userIdentities.map {
+            $0.nameComponents?.formatted() ?? erroneousAuthorName
+        }
+    }
+    
+    var userInitials: [String] {
+        userNames.map { userName in
+            if let c = userName.first {
+                return String(c)
+            }
+            return erroneousAuthorInitials
+        }
     }
     
     func wrappedAuthorName(_ authorRecordName: String?) -> String {
@@ -30,7 +41,7 @@ extension NSManagedObject {
         guard let authorIdentity = userIdentities.first(where: { $0.userRecordID?.recordName == authorRecordName }) else {
             return erroneousAuthorName
         }
-        return authorIdentity.wrappedName
+        return authorIdentity.nameComponents?.formatted() ?? erroneousAuthorName
     }
     
     func wrappedAuthorInitials(_ authorRecordName: String?) -> String {
