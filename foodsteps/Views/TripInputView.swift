@@ -493,7 +493,7 @@ struct TripInputView: View {
         } else {
             List {
                 ForEach(sortedStops, id: \.objectID) { stop in
-                    placeRow(stop: stop)
+                    PlaceRow(stop: stop)
                 }
                 .onDelete { offsets in
                     for index in offsets {
@@ -508,59 +508,74 @@ struct TripInputView: View {
         }
     }
 
-    private func placeRow(stop: Stop) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(stop.location?.name ?? "Unknown")
-                    .font(.headline)
-                Text(stop.location?.address ?? "")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                Text(stop.wrappedAuthorName)
-                    .font(.caption2.weight(.medium))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color(uiColor: .systemGray6))
-                    .clipShape(Capsule())
-            }
-            Spacer()
-            Button {
-                toggleVote(for: stop)
-            } label: {
-                VStack(spacing: 2) {
-                    Image(systemName: hasVoted(on: stop) ? "heart.fill" : "heart")
-                        .foregroundColor(hasVoted(on: stop) ? .red : .secondary)
-                    Text("\(stop.hearts)")
-                        .font(.caption2)
+    // MARK: - Place row
+    // A dedicated View (rather than a helper function returning `some View`)
+    // so `stop` can be held as @ObservedObject. NSManagedObject conforms to
+    // ObservableObject, so this subscribes this row specifically to changes
+    // on that Stop's `votes` relationship — including votes that arrive from
+    // other participants via CloudKit sync and get merged into this context.
+    // Without this, only `trip`'s own attributes were observed (see the
+    // Core Data Propagation note above), so a vote cast by someone else on
+    // a shared trip would land in the store but never repaint the heart.
+    private struct PlaceRow: View {
+        @ObservedObject var stop: Stop
+        @Environment(\.managedObjectContext) private var moc
+
+        var body: some View {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(stop.location?.name ?? "Unknown")
+                        .font(.headline)
+                    Text(stop.location?.address ?? "")
+                        .font(.caption)
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    Text(stop.wrappedAuthorName)
+                        .font(.caption2.weight(.medium))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color(uiColor: .systemGray6))
+                        .clipShape(Capsule())
                 }
+                Spacer()
+                Button {
+                    toggleVote()
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: hasVoted ? "heart.fill" : "heart")
+                            .foregroundColor(hasVoted ? .red : .secondary)
+                        Text("\(stop.hearts)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(.vertical, 6)
         }
-        .padding(.vertical, 6)
-    }
 
-    /// Vote model has no hasVoted/toggleVote convenience — those were on the
-    /// old Stop entity and don't exist in the current schema/helpers. Voting
-    /// is expressed purely through the `votes` relationship (one Vote per
-    /// authorRecordName) plus Vote.insert(into:stop:) from Vote+Helper.
-    private func hasVoted(on stop: Stop) -> Bool {
-        guard let recordName = dataController.currentUserRecordName else { return false }
-        let votes = stop.votes as? Set<Vote> ?? []
-        return votes.contains { $0.authorRecordName == recordName }
-    }
-
-    private func toggleVote(for stop: Stop) {
-        guard let recordName = dataController.currentUserRecordName else { return }
-        let votes = stop.votes as? Set<Vote> ?? []
-        if let existingVote = votes.first(where: { $0.authorRecordName == recordName }) {
-            moc.delete(existingVote)
-        } else {
-            Vote.insert(into: moc, stop: stop)
+        /// Vote model has no hasVoted/toggleVote convenience — those were on
+        /// the old Stop entity and don't exist in the current schema/helpers.
+        /// Voting is expressed purely through the `votes` relationship (one
+        /// Vote per authorRecordName) plus Vote.insert(into:stop:) from
+        /// Vote+Helper.
+        private var hasVoted: Bool {
+            guard let recordName = dataController.currentUserRecordName else { return false }
+            let votes = stop.votes as? Set<Vote> ?? []
+            return votes.contains { $0.authorRecordName == recordName }
         }
-        try? moc.save()
+
+        private func toggleVote() {
+            guard let recordName = dataController.currentUserRecordName else { return }
+            let votes = stop.votes as? Set<Vote> ?? []
+            if let existingVote = votes.first(where: { $0.authorRecordName == recordName }) {
+                moc.delete(existingVote)
+            } else {
+                Vote.insert(into: moc, stop: stop)
+            }
+            try? moc.save()
+        }
     }
 
     private var addPlaceSheet: some View {
