@@ -49,4 +49,16 @@ extension Stop {
     var hearts: Int {
         votes?.count ?? 0
     }
+
+    /// Persists a route order (whether it came from the distance optimizer
+    /// or a manual drag-to-reorder) by writing 0-based `sortOrder` values in
+    /// array order and saving. This is the only place `sortOrder` gets
+    /// written, so both "generated" and "customized" orders go through the
+    /// same path.
+    static func persistSortOrder(for orderedStops: [Stop], in moc: NSManagedObjectContext) {
+        for (index, stop) in orderedStops.enumerated() {
+            stop.sortOrder = Int16(index)
+        }
+        try? moc.save()
+    }
 }

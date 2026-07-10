@@ -144,6 +144,7 @@ struct TripInputView: View {
         }
         .onAppear {
             locationManager.requestPermissionAndStart()
+            restoreSavedOrderIfNeeded()
         }
         .sheet(isPresented: $showShareView) {
             ShareView(share: trip.share!)
@@ -224,9 +225,30 @@ struct TripInputView: View {
         let start = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation ?? CLLocationCoordinate2D(latitude: -6.3000, longitude: 106.4000)
 
         Task {
-            await routePlanner.optimizeAndCalculate(from: start)
+            await routePlanner.optimizeAndCalculate(from: start, moc: moc)
             isPreparingRoute = false
             completion()
+        }
+    }
+
+    /// Restores a previously generated/customized route order from the
+    /// saved `sortOrder` on each Stop, so reopening a trip doesn't lose a
+    /// manual reorder or force a re-generate. Only kicks in when the
+    /// planner is still empty (fresh view) and an order was actually saved
+    /// before (`hasSavedStopOrder`) — otherwise the "Generate Route" flow
+    /// behaves exactly as before.
+    private func restoreSavedOrderIfNeeded() {
+        guard routePlanner.orderedStops.isEmpty, trip.hasSavedStopOrder else { return }
+
+        let restored = trip.wrappedPlaceStopsBySortOrder.filter { $0.location != nil }
+        guard !restored.isEmpty else { return }
+
+        routePlanner.stops = restored
+        routePlanner.orderedStops = restored
+        routePlanner.startingCoordinate = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation
+
+        Task {
+            await routePlanner.recalculateLegsForCurrentOrder()
         }
     }
 

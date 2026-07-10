@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import CoreData
 
 /// The "Route" tab: a map preview of the suggested/current route, distance
 /// stats, and the reorderable list of stops. Owns its own map camera state
@@ -8,6 +9,8 @@ struct RouteView: View {
     @ObservedObject var trip: Trip
     var routePlanner: RoutePlanner
     var locationManager: LocationManager
+
+    @Environment(\.managedObjectContext) private var moc
 
     var placeStops: [Stop]
     var meetingPointDisplayName: String?
@@ -214,6 +217,7 @@ struct RouteView: View {
 
     private func moveStops(from source: IndexSet, to destination: Int) {
         routePlanner.orderedStops.move(fromOffsets: source, toOffset: destination)
+        Stop.persistSortOrder(for: routePlanner.orderedStops, in: moc)
 
         let token = UUID()
         reorderToken = token

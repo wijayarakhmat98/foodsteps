@@ -1,6 +1,7 @@
 import Foundation
 import MapKit
 import Observation
+import CoreData
 
 // RouteStop is gone — Stop is now identifiable on its own (see Stop+Helper)
 // and Location+Helper already gives us `toMapItem()`, so RoutePlanner can
@@ -94,7 +95,7 @@ class RoutePlanner {
         }
 
     @MainActor
-        func optimizeAndCalculate(from userCoordinate: CLLocationCoordinate2D) async {
+        func optimizeAndCalculate(from userCoordinate: CLLocationCoordinate2D, moc: NSManagedObjectContext) async {
             guard !stops.isEmpty else { return }
             isOptimizing = true
             self.startingCoordinate = userCoordinate // Save the meeting point here!
@@ -102,6 +103,7 @@ class RoutePlanner {
 
             let ordered = Self.bestOrder(stops: stops, startingAt: userCoordinate)
             orderedStops = ordered
+            Stop.persistSortOrder(for: ordered, in: moc)
 
             // Pass the start coordinate into fetchLegs
             let (newLegs, distanceSum, timeSum) = await Self.fetchLegs(for: ordered, startingAt: userCoordinate, transportType: transportType)

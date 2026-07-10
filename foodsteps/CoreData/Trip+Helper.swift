@@ -63,6 +63,25 @@ extension Trip {
         scheduledEnd ?? erroneousScheduledEnd
     }
 
+    /// True once the place stops have an explicit saved order — i.e. their
+    /// `sortOrder` values aren't all still sitting at the default of 0. Lets
+    /// the Route tab restore a previously generated/customized order
+    /// without asking the user to regenerate it from scratch.
+    var hasSavedStopOrder: Bool {
+        let placeSortOrders = wrappedStops
+            .filter { $0.type != StopType.meetingPoint.rawValue }
+            .map { $0.sortOrder }
+        return Set(placeSortOrders).count > 1
+    }
+
+    /// Place stops (excludes the meeting point) ordered by the saved
+    /// `sortOrder`, for restoring a previously computed/customized route.
+    var wrappedPlaceStopsBySortOrder: [Stop] {
+        wrappedStops
+            .filter { $0.type != StopType.meetingPoint.rawValue }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
     var meetingPointCoordinate: CLLocation? {
         guard let stop = wrappedStops.first(where: {stop in stop.type == StopType.meetingPoint.rawValue}) else {
             return nil
