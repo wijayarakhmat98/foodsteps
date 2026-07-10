@@ -11,10 +11,20 @@ struct SearchView: View {
     
     @State var search: String = ""
     
+    @State private var scrollOffset: CGFloat = 0
+
     let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
     ]
+
+    private var isHeaderSticky: Bool {
+        scrollOffset > 185
+    }
+    
+    init(query: String?) {
+        self._search = State(initialValue: query ?? "")
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -102,5 +112,5 @@ struct SearchView: View {
 }
 
 #Preview {
-    SearchView()
+    SearchView(query: "Test")
 }
