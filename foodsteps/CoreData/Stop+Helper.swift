@@ -37,8 +37,7 @@ extension Stop {
     var wrappedCreatedAt: Date {
         createdAt ?? erroneousCreatedAt
     }
-    
-    
+
     var wrappedAuthorName: String {
         super.wrappedAuthorName(authorRecordName)
     }
