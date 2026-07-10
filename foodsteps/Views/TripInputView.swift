@@ -173,11 +173,6 @@ struct TripInputView: View {
         .onAppear {
             locationManager.requestPermissionAndStart()
         }
-        .onChange(of: selectedTab) { _, newValue in
-            if newValue == .route, routePlanner.orderedStops.isEmpty, !placeStops.isEmpty {
-                computeRoute {}
-            }
-        }
         .onChange(of: routePlanner.orderedStops.count) { _, _ in
             fitMapPreview()
         }
@@ -266,19 +261,14 @@ struct TripInputView: View {
     }
 
     private func avatarCircle(for name: String) -> some View {
-        let isSelected = name == currentParticipantName
-        return Button {
-            currentParticipantName = name
-        } label: {
-            Text(String(name.prefix(1)).uppercased())
-                .font(.caption.bold())
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(isSelected ? Color.blue : Color.gray))
-                .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
-        }
+        Text(String(name.prefix(1)).uppercased())
+            .font(.caption.bold())
+            .foregroundColor(.white)
+            .frame(width: 36, height: 36)
+            .background(Circle().fill(Color.gray))
+            .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
     }
-
+    
     private var addPersonButton: some View {
         Button {
             isAddingParticipant = true
@@ -446,11 +436,6 @@ struct TripInputView: View {
                 routePlanner.orderedStops.removeAll()
                 routePlanner.legs.removeAll()
                 fitMapPreview()
-
-                // Recalculate immediately if there are stops
-                if !placeStops.isEmpty {
-                    computeRoute { }
-                }
             }
         }
     }
@@ -773,7 +758,21 @@ struct TripInputView: View {
                 }
                 .onMove(perform: moveStops)
             } header: {
-                Text("Suggested order (by distance)")
+                HStack {
+                    Text("Suggested order (by distance)")
+                    Spacer()
+                    // The new manual Generate Route button
+                    if !placeStops.isEmpty {
+                        Button {
+                            computeRoute {}
+                        } label: {
+                            Text(routePlanner.orderedStops.isEmpty ? "Generate Route" : "Regenerate")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.blue)
+                        }
+                        .disabled(isPreparingRoute)
+                    }
+                }
             }
         }
         .listStyle(.plain)
