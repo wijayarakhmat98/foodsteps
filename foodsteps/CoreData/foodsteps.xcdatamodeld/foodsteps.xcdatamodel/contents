@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24902" systemVersion="25E253" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="Complete" representedClassName="Complete" syncable="YES" codeGenerationType="class">
+        <attribute name="authorRecordName" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="completes" inverseEntity="Trip"/>
+    </entity>
     <entity name="Location" representedClassName="Location" syncable="YES" codeGenerationType="class">
         <attribute name="address" optional="YES" attributeType="String"/>
         <attribute name="authorRecordName" optional="YES" attributeType="String"/>
@@ -28,6 +34,7 @@
         <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="scheduledEnd" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="scheduledStart" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="completes" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Complete" inverseName="trip" inverseEntity="Complete"/>
         <relationship name="stops" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Stop" inverseName="trip" inverseEntity="Stop"/>
     </entity>
     <entity name="Vote" representedClassName="Vote" syncable="YES" codeGenerationType="class">
