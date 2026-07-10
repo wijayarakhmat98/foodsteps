@@ -67,6 +67,9 @@ struct HorizontalFoodCard: View {
                 .shadow(color: .gray.opacity(0.3), radius: 4, x: 0, y: 2)
         )
         .padding(.vertical, 10)
+        .onTapGesture {
+            AppRoute.push(.placeDetail)
+        }
     }
 }
 

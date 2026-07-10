@@ -104,6 +104,9 @@ struct VerticalFoodCard: View {
                 y: 2
             )
         )
+        .onTapGesture {
+            AppRoute.push(.placeDetail)
+        }
 //        .frame(height: 180)
     }
 }

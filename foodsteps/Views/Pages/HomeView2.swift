@@ -2,8 +2,10 @@ import SwiftUI
 
 struct HomeView2: View {
     @State private var search = ""
-    // Menggunakan state offset hasil tangkapan iOS 17 native API
+    
     @State private var scrollOffset: CGFloat = 0
+    
+    @State private var isSearchState: Bool = false
 
     let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -128,7 +130,7 @@ struct HomeView2: View {
 
                                     TextField("Search", text: $search)
                                         .onSubmit {
-                                            
+                                            AppRoute.push(.search(query: ""))
                                         }
 
                                     Image(systemName: "mic.fill")
