@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import CoreData
+import Combine
 
 private enum HubTab: String, CaseIterable {
     case places = "Places"
@@ -144,7 +145,10 @@ struct TripInputView: View {
         }
         .onAppear {
             locationManager.requestPermissionAndStart()
-            restoreSavedOrderIfNeeded()
+            syncRoutePlannerOrderIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange, object: moc)) { notification in
+            handleContextObjectsChanged(notification)
         }
         .sheet(isPresented: $showShareView) {
             ShareView(share: trip.share!)
@@ -231,20 +235,77 @@ struct TripInputView: View {
         }
     }
 
-    /// Restores a previously generated/customized route order from the
-    /// saved `sortOrder` on each Stop, so reopening a trip doesn't lose a
-    /// manual reorder or force a re-generate. Only kicks in when the
-    /// planner is still empty (fresh view) and an order was actually saved
-    /// before (`hasSavedStopOrder`) — otherwise the "Generate Route" flow
-    /// behaves exactly as before.
-    private func restoreSavedOrderIfNeeded() {
-        guard routePlanner.orderedStops.isEmpty, trip.hasSavedStopOrder else { return }
+    /// Keeps this trip's data live across devices.
+    ///
+    /// `@ObservedObject var trip` only re-renders when Trip's *own*
+    /// properties change. A collaborator's edit — a vote on a Stop, a
+    /// changed `sortOrder` — mutates a related object, not Trip itself, so
+    /// CloudKit merges it into our local store just fine but SwiftUI never
+    /// hears about it (that's why quitting and reopening "fixed" it: that
+    /// forces a fresh fetch). `PlacesView.toggleVote` already works around
+    /// this for local vote taps; this does the same thing but for changes
+    /// arriving from *any* source, including a remote CloudKit merge.
+    ///
+    /// IMPORTANT: this must never call any Core Data API that itself marks
+    /// objects as changed/refreshed (e.g. `moc.refresh(_:mergeChanges:)`) —
+    /// doing so posts another `NSManagedObjectContextObjectsDidChange`
+    /// notification, which re-triggers this very handler. That doesn't blow
+    /// the call stack (each pass returns before the next notification
+    /// arrives, on the next run-loop turn via Core Data's own batching), so
+    /// a same-frame reentrancy guard doesn't catch it — it just becomes an
+    /// infinite loop spread across run-loop ticks, spawning a fresh legs
+    /// recalculation `Task` each pass, that quietly balloons memory until
+    /// iOS kills the app for excessive memory use. `objectWillChange.send()`
+    /// notifies SwiftUI directly without touching Core Data's change
+    /// tracking, so it can't feed back into this notification at all.
+    private func handleContextObjectsChanged(_ notification: Notification) {
+        guard let userInfo = notification.userInfo else { return }
 
-        let restored = trip.wrappedPlaceStopsBySortOrder.filter { $0.location != nil }
-        guard !restored.isEmpty else { return }
+        let changed: [NSManagedObject] = [
+            userInfo[NSInsertedObjectsKey] as? Set<NSManagedObject> ?? [],
+            userInfo[NSUpdatedObjectsKey] as? Set<NSManagedObject> ?? [],
+            userInfo[NSDeletedObjectsKey] as? Set<NSManagedObject> ?? [],
+            userInfo[NSRefreshedObjectsKey] as? Set<NSManagedObject> ?? [],
+        ].flatMap { $0 }
 
-        routePlanner.stops = restored
-        routePlanner.orderedStops = restored
+        guard changed.contains(where: isRelevantToThisTrip) else { return }
+
+        trip.objectWillChange.send()
+        syncRoutePlannerOrderIfNeeded()
+    }
+
+    private func isRelevantToThisTrip(_ object: NSManagedObject) -> Bool {
+        switch object {
+        case let candidate as Trip:
+            return candidate.objectID == trip.objectID
+        case let stop as Stop:
+            return stop.trip?.objectID == trip.objectID
+        case let vote as Vote:
+            return vote.stop?.trip?.objectID == trip.objectID
+        case let location as Location:
+            return location.stop?.trip?.objectID == trip.objectID
+        default:
+            return false
+        }
+    }
+
+    /// Syncs `routePlanner.orderedStops` from the saved `sortOrder` on each
+    /// Stop whenever it's out of date — on first appearance (restoring a
+    /// previously generated/customized order instead of forcing a
+    /// re-generate) and again whenever a remote change updates the order,
+    /// e.g. a collaborator drags stops around on their own phone.
+    private func syncRoutePlannerOrderIfNeeded() {
+        guard !routePlanner.isNavigating, trip.hasSavedStopOrder else { return }
+
+        let latestOrder = trip.wrappedPlaceStopsBySortOrder.filter { $0.location != nil }
+        guard !latestOrder.isEmpty else { return }
+
+        let currentIDs = routePlanner.orderedStops.map { $0.wrappedID }
+        let latestIDs = latestOrder.map { $0.wrappedID }
+        guard currentIDs != latestIDs else { return }
+
+        routePlanner.stops = latestOrder
+        routePlanner.orderedStops = latestOrder
         routePlanner.startingCoordinate = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation
 
         Task {
