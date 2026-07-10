@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24902" systemVersion="25E253" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="Location" representedClassName="Location" syncable="YES" codeGenerationType="class">
+        <attribute name="address" optional="YES" attributeType="String"/>
+        <attribute name="authorRecordName" optional="YES" attributeType="String"/>
+        <attribute name="category" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="latitude" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="longitude" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <relationship name="stop" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Stop" inverseName="location" inverseEntity="Stop"/>
+    </entity>
+    <entity name="Stop" representedClassName="Stop" syncable="YES" codeGenerationType="class">
+        <attribute name="authorRecordName" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="sortOrder" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="type" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="location" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="Location" inverseName="stop" inverseEntity="Location"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Trip" inverseName="stops" inverseEntity="Trip"/>
+        <relationship name="votes" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Vote" inverseName="stop" inverseEntity="Vote"/>
+    </entity>
+    <entity name="Trip" representedClassName="Trip" syncable="YES" codeGenerationType="class">
+        <attribute name="authorRecordName" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="scheduledEnd" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="scheduledStart" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="stops" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Stop" inverseName="trip" inverseEntity="Stop"/>
+    </entity>
+    <entity name="Vote" representedClassName="Vote" syncable="YES" codeGenerationType="class">
+        <attribute name="authorRecordName" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <relationship name="stop" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Stop" inverseName="votes" inverseEntity="Stop"/>
+    </entity>
+</model>

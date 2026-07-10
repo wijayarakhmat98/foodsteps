@@ -1,0 +1,67 @@
+import CoreData
+import MapKit
+
+private let erroneousID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+private let erroneousCreatedAt = Date(timeIntervalSinceReferenceDate: 0)
+private let erroneousName = "Unknown Location"
+private let erroneousAddress = "Unknown Address"
+private let erroneousCategory = "Unknown Category"
+
+extension Location {
+    @discardableResult
+    static func insert(
+        into moc: NSManagedObjectContext,
+        mapItem: MKMapItem
+    )
+    -> Location
+    {
+        let location = Location(context: moc)
+        location.id = UUID()
+        location.createdAt = Date()
+        location.authorRecordName = dataController.currentUserRecordName
+        location.name = mapItem.name
+        location.address = mapItem.address?.fullAddress
+        location.category = mapItem.pointOfInterestCategory?.rawValue
+        location.latitude = mapItem.location.coordinate.latitude
+        location.longitude = mapItem.location.coordinate.longitude
+        return location
+    }
+
+    var wrappedID: UUID {
+        id ?? erroneousID
+    }
+
+    var wrappedCreatedAt: Date {
+        createdAt ?? erroneousCreatedAt
+    }
+
+    var wrappedAuthorName: String {
+        super.wrappedAuthorName(authorRecordName)
+    }
+
+    var wrappedAuthorInitials: String {
+        super.wrappedAuthorInitials(authorRecordName)
+    }
+
+    var wrappedName: String {
+        name ?? erroneousName
+    }
+
+    var wrappedAddress: String {
+        address ?? erroneousAddress
+    }
+
+    var wrappedCategory: String {
+        category ?? erroneousCategory
+    }
+
+    func toMapItem() -> MKMapItem {
+        MKMapItem.create(
+            name: wrappedName,
+            address: address,
+            category: category,
+            latitude: latitude,
+            longitude: longitude
+        )
+    }
+}
