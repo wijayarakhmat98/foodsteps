@@ -28,33 +28,33 @@ extension Trip {
         trip.scheduledEnd = scheduledEnd
         return trip
     }
-    
+
     var wrappedID: UUID {
         id ?? erroneousID
     }
-    
+
     var wrappedCreatedAt: Date {
         createdAt ?? erroneousCreatedAt
     }
-    
+
     var wrappedAuthorName: String {
         super.wrappedAuthorName(authorRecordName)
     }
-    
+
     var wrappedAuthorInitials: String {
         super.wrappedAuthorInitials(authorRecordName)
     }
-    
+
     var wrappedStops: [Stop] {
         (stops as? Set<Stop> ?? erroneousStops).sorted {
-            $0.wrappedCreatedAt < $1.wrappedCreatedAt
+            $0.hearts < $1.hearts
         }
     }
-    
+
     var wrappedName: String {
         name ?? erroneousName
     }
-    
+
     var wrappedScheduledStart: Date {
         scheduledStart ?? erroneousScheduledStart
     }
@@ -62,7 +62,7 @@ extension Trip {
     var wrappedScheduledEnd: Date {
         scheduledEnd ?? erroneousScheduledEnd
     }
-    
+
     var meetingPointCoordinate: CLLocation? {
         guard let stop = wrappedStops.first(where: {stop in stop.type == StopType.meetingPoint.rawValue}) else {
             return nil
