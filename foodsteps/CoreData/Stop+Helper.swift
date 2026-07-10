@@ -49,13 +49,4 @@ extension Stop {
     var hearts: Int {
         votes?.count ?? 0
     }
-    
-    func toRouteStop() -> RouteStop? {
-        // We need both a valid location and a valid ID to create the RouteStop
-        guard let location = self.location, let id = self.id else { return nil }
-        
-        // IMPORTANT: We use the Stop's ID (not the Location's ID) so the app
-        // can successfully track which Stop was visited later.
-        return RouteStop(id: id.uuidString, mapItem: location.toMapItem())
-    }
 }

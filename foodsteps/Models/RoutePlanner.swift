@@ -2,12 +2,27 @@ import Foundation
 import MapKit
 import Observation
 
+// RouteStop is gone — Stop is now identifiable on its own (see Stop+Helper)
+// and Location+Helper already gives us `toMapItem()`, so RoutePlanner can
+// work with Stop entities directly. These two accessors just bridge that
+// gap for the routing/distance math below; they live here (not in
+// Stop+Helper.swift) since they're routing-specific, not general helpers.
+extension Stop {
+    var mapItem: MKMapItem {
+        location?.toMapItem() ?? MKMapItem()
+    }
+
+    var displayName: String {
+        location?.wrappedName ?? "Unknown"
+    }
+}
+
 @Observable
 class RoutePlanner {
-    // Explicitly tracking by ID using RouteStop
+    // Explicitly tracking by ID using Stop (Core Data entity, identifiable)
     var startingCoordinate: CLLocationCoordinate2D?
-    var stops: [RouteStop] = []
-    var orderedStops: [RouteStop] = []
+    var stops: [Stop] = []
+    var orderedStops: [Stop] = []
     var legs: [MKRoute] = []
 
     var isOptimizing = false
@@ -95,7 +110,7 @@ class RoutePlanner {
             totalTime = timeSum
         }
 
-    private static func bestOrder(stops: [RouteStop], startingAt userCoordinate: CLLocationCoordinate2D) -> [RouteStop] {
+    private static func bestOrder(stops: [Stop], startingAt userCoordinate: CLLocationCoordinate2D) -> [Stop] {
         guard stops.count > 1 else { return stops }
         let matrix = distanceMatrix(stops: stops, userCoordinate: userCoordinate)
         let orderIndices: [Int]
@@ -109,7 +124,7 @@ class RoutePlanner {
         return orderIndices.map { stops[$0] }
     }
 
-    private static func distanceMatrix(stops: [RouteStop], userCoordinate: CLLocationCoordinate2D) -> [[CLLocationDistance]] {
+    private static func distanceMatrix(stops: [Stop], userCoordinate: CLLocationCoordinate2D) -> [[CLLocationDistance]] {
         var points = [CLLocation(latitude: userCoordinate.latitude, longitude: userCoordinate.longitude)]
         points.append(contentsOf: stops.map { item in
             CLLocation(latitude: item.mapItem.placemark.coordinate.latitude, longitude: item.mapItem.placemark.coordinate.longitude)
@@ -223,7 +238,7 @@ class RoutePlanner {
     }
 
     // Update the function signature to accept `startingAt`
-        private static func fetchLegs(for orderedStops: [RouteStop], startingAt startCoordinate: CLLocationCoordinate2D, transportType: MKDirectionsTransportType) async -> ([MKRoute], CLLocationDistance, TimeInterval) {
+        private static func fetchLegs(for orderedStops: [Stop], startingAt startCoordinate: CLLocationCoordinate2D, transportType: MKDirectionsTransportType) async -> ([MKRoute], CLLocationDistance, TimeInterval) {
             var newLegs: [MKRoute] = []
             
             // FIX: Start from the given coordinate instead of the device GPS
@@ -286,7 +301,7 @@ class RoutePlanner {
         isPaused = false
     }
 
-    var currentNavigationStop: RouteStop? {
+    var currentNavigationStop: Stop? {
         guard isNavigating, currentLegIndex < orderedStops.count else { return nil }
         return orderedStops[currentLegIndex]
     }
@@ -347,11 +362,11 @@ class RoutePlanner {
 
         let distance = user.distance(from: target)
 
-        print("Distance to \(destination.name): \(Int(distance))m")
+        print("Distance to \(destination.displayName): \(Int(distance))m")
 
         if distance <= arrivalDistance {
 
-            print("Arrived at \(destination.name)")
+            print("Arrived at \(destination.displayName)")
 
             if advanceToNextStop() {
 
@@ -359,7 +374,7 @@ class RoutePlanner {
 
                     locationManager.monitorArrival(
                         at: next.mapItem.placemark.coordinate,
-                        identifier: next.name
+                        identifier: next.displayName
                     )
 
                 }
@@ -376,7 +391,7 @@ class RoutePlanner {
 
     }
 
-    func reorderStops(to newOrder: [RouteStop]) {
+    func reorderStops(to newOrder: [Stop]) {
         let previousCurrentStop = currentNavigationStop
         orderedStops = newOrder
         stops = newOrder

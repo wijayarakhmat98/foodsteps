@@ -64,9 +64,4 @@ extension Location {
             longitude: longitude
         )
     }
-
-    func toRouteStop() -> RouteStop {
-        let identifier = wrappedID.uuidString
-        return RouteStop(id: identifier, mapItem: toMapItem())
-    }
 }

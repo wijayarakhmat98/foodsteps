@@ -85,7 +85,7 @@ struct ActiveRouteView: View {
             if let stop = routePlanner.currentNavigationStop {
                 locationManager.monitorArrival(
                     at: stop.mapItem.placemark.coordinate,
-                    identifier: stop.name
+                    identifier: stop.displayName
                 )
             }
 
@@ -140,7 +140,7 @@ struct ActiveRouteView: View {
             }
 
             ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
-                Annotation(stop.name, coordinate: stop.mapItem.placemark.coordinate) {
+                Annotation(stop.displayName, coordinate: stop.mapItem.placemark.coordinate) {
                     ZStack {
                         Circle().fill(Color.brandPurple).frame(width: 24, height: 24)
                         Text("\(index + 1)")
@@ -272,7 +272,7 @@ struct ActiveRouteView: View {
                 ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
                     StopTimelineRow(
                         index: index,
-                        title: stop.name,
+                        title: stop.displayName,
                         subtitle: subtitle(for: stop, at: index),
                         isLast: index == routePlanner.orderedStops.count - 1,
                         isHighlighted: index == routePlanner.currentLegIndex
@@ -283,7 +283,7 @@ struct ActiveRouteView: View {
         }
     }
 
-    private func subtitle(for stop: RouteStop, at index: Int) -> String {
+    private func subtitle(for stop: Stop, at index: Int) -> String {
         let category = categoryLabel(for: stop.mapItem.pointOfInterestCategory) ?? "Place"
 
         if index == routePlanner.currentLegIndex {
@@ -364,7 +364,7 @@ struct ActiveRouteView: View {
             if let next = routePlanner.currentNavigationStop {
                 locationManager.monitorArrival(
                     at: next.mapItem.placemark.coordinate,
-                    identifier: next.name
+                    identifier: next.displayName
                 )
             }
         }

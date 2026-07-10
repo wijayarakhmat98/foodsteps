@@ -709,7 +709,7 @@ struct TripInputView: View {
             }
 
             ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
-                Annotation(stop.name, coordinate: stop.mapItem.placemark.coordinate) {
+                Annotation(stop.displayName, coordinate: stop.mapItem.placemark.coordinate) {
                     ZStack {
                         Circle().fill(Color.black).frame(width: 24, height: 24)
                         Text("\(index + 1)")
@@ -797,14 +797,14 @@ struct TripInputView: View {
         .padding(.vertical, 4)
     }
 
-    private func routeStopRow(index: Int, stop: RouteStop) -> some View {
+    private func routeStopRow(index: Int, stop: Stop) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle().fill(Color.black).frame(width: 28, height: 28)
                 Text("\(index + 1)").font(.caption.bold()).foregroundColor(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(stop.name)
+                Text(stop.displayName)
                     .font(.subheadline.weight(.semibold))
                 Text(distanceLabel(forLegAt: index))
                     .font(.caption)
@@ -915,13 +915,12 @@ struct TripInputView: View {
 
     private func computeRoute(completion: @escaping () -> Void) {
             isPreparingRoute = true
-            
-            // Map the CoreData Stop entities directly into RouteStops inline
-            routePlanner.stops = placeStops.compactMap { stop in
-                guard let location = stop.location, let id = stop.id else { return nil }
-                return RouteStop(id: id.uuidString, mapItem: location.toMapItem())
-            }
-            
+
+            // Stop is identifiable and toMapItem() comes from Location+Helper,
+            // so the planner can just work with the CoreData Stop entities
+            // directly — no more separate RouteStop translation needed.
+            routePlanner.stops = placeStops.filter { $0.location != nil }
+
             let start = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation ?? CLLocationCoordinate2D(latitude: -6.3000, longitude: 106.4000)
             
             Task {
@@ -934,9 +933,7 @@ struct TripInputView: View {
     // MARK: - Trip finished
 
     private var finishedStopEntities: [Stop] {
-        routePlanner.orderedStops.compactMap { routeStop in
-            stops.first { $0.id?.uuidString == routeStop.id }
-        }
+        routePlanner.orderedStops
     }
 
     private func saveTripResult() {
