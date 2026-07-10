@@ -47,7 +47,7 @@ extension Trip {
 
     var wrappedStops: [Stop] {
         (stops as? Set<Stop> ?? erroneousStops).sorted {
-            $0.wrappedCreatedAt < $1.wrappedCreatedAt
+            $0.hearts < $1.hearts
         }
     }
 
