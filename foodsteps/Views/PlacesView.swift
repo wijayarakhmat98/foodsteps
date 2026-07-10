@@ -293,8 +293,11 @@ struct PlacesView: View {
         .padding(.vertical, 10)
     }
 
-    private var sortedStops: [Stop] {
-        placeStops.sorted { $0.hearts > $1.hearts }
+    /// Trip+Helper's `wrappedStops` sorts ascending by hearts (lowest
+    /// first); reversing that gives highest-voted first without adding any
+    /// sorting logic of our own here.
+    private var topVotedStops: [Stop] {
+        placeStops.reversed()
     }
 
     @ViewBuilder
@@ -308,12 +311,12 @@ struct PlacesView: View {
             .frame(maxHeight: .infinity)
         } else {
             List {
-                ForEach(sortedStops, id: \.objectID) { stop in
-                    PlaceRow(stop: stop)
+                ForEach(topVotedStops, id: \.objectID) { stop in
+                    PlaceRow(stop: stop, trip: trip)
                 }
                 .onDelete { offsets in
                     for index in offsets {
-                        moc.delete(sortedStops[index])
+                        moc.delete(topVotedStops[index])
                     }
                     try? moc.save()
                     routePlanner.orderedStops = []
@@ -335,6 +338,7 @@ struct PlacesView: View {
     // a shared trip would land in the store but never repaint the heart.
     private struct PlaceRow: View {
         @ObservedObject var stop: Stop
+        let trip: Trip
         @Environment(\.managedObjectContext) private var moc
 
         var body: some View {
@@ -391,6 +395,12 @@ struct PlacesView: View {
                 Vote.insert(into: moc, stop: stop)
             }
             try? moc.save()
+            // Voting changes `hearts`, which the places list is ordered by
+            // (via `trip.wrappedStops` → `placeStops`), not something that
+            // lives on `stop` itself. Refreshing just `stop` wouldn't
+            // re-trigger that re-order, so refresh `trip` (merging in the
+            // save) to make sure the row order updates too.
+            moc.refresh(trip, mergeChanges: true)
         }
     }
 
