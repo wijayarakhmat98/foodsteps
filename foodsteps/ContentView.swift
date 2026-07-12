@@ -13,14 +13,10 @@ struct ContentView: View {
                     .tabItem {
                         Label("Home", systemImage: "house.fill")
                     }
-
+                
                 TripHistoryView()
                     .tabItem {
                         Label("Trip", systemImage: "paperplane.fill")
-                    }
-                TripView()
-                    .tabItem {
-                        Label("will Trip", systemImage: "ant.circle")
                     }
             }
             .tint(Color(hex: "#FF8F14"))
@@ -28,7 +24,6 @@ struct ContentView: View {
                 route.destinationView()
             }
         }
-//        .navigationBarHidden(true)
     }
 }
 
