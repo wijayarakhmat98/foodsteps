@@ -90,13 +90,13 @@ struct SearchView: View {
                     ForEach(restaurants.indices, id: \.self) { index in
                         let data = restaurants[index]
                         
-                        VerticalFoodCard(
-                            url: data["image_url"] as? String ?? "",
-                            title: data["name"] as? String ?? "",
-                            type: data["type"] as? String ?? "",
-                            comment: data["comment"] as? String ?? "",
-                            rating: data["rating"] as? Double ?? 4.7,
-                        )
+//                        VerticalFoodCard(
+//                            url: data["image_url"] as? String ?? "",
+//                            title: data["name"] as? String ?? "",
+//                            type: data["type"] as? String ?? "",
+//                            comment: data["comment"] as? String ?? "",
+//                            rating: data["rating"] as? Double ?? 4.7,
+//                        )
                     }
                 }
                 .padding(.bottom, 16)

@@ -7,26 +7,23 @@
 
 import SwiftUI
 
+import SwiftUI
+
 struct SearchView2: View {
-    @State private var search = ""
-    
+    let query: String
     @State private var scrollOffset: CGFloat = 0
-    
     @State private var isSearchState: Bool = false
+    
+    // Inisialisasi ViewModel Baru
+    @State private var viewModel = SearchViewModel()
 
     let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
     ]
 
-    // Evaluasi status sticky berdasarkan offset scroll
-    // Jika scroll sudah berjalan lebih dari 105pt, nyalakan status sticky
     private var isHeaderSticky: Bool {
         scrollOffset > 185
-    }
-    
-    init(query: String?) {
-        self._search = State(initialValue: query ?? "")
     }
 
     var body: some View {
@@ -36,7 +33,7 @@ struct SearchView2: View {
             ScrollView(showsIndicators: false) {
                 ZStack(alignment: .top) {
                     
-                    // MARK: - Hero Background & Mascot (Struktur Asli Kamu)
+                    // MARK: - Hero Background & Mascot
                     ZStack(alignment: .bottomTrailing) {
                         Color.clear
                             .frame(height: 262)
@@ -46,7 +43,8 @@ struct SearchView2: View {
                             .scaledToFit()
                             .padding(.leading, 120)
                             .frame(width: 320, height: 182)
-                            
+                            .scaleEffect(x: -1, y: 1)
+                            .offset(x: 130)
                     }
                     .background(
                         Color(hex: "#4B08B5")
@@ -76,37 +74,93 @@ struct SearchView2: View {
 
                         // MARK: - Sticky Section
                         Section {
-                                // Recently
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    VStack(spacing: 16) {
-                                        ForEach(0..<10, id: \.self) { index in
-                                            let data = restaurants[index + 5]
-                                            SearchFoodCard()
-//                                            (
-//                                                url: data["image_url"] as? String ?? "",
-//                                                title: data["name"] as? String ?? "",
-//                                                type: data["type"] as? String ?? "",
-//                                                rating: data["rating"] as? Double ?? 4.7
-//                                            )
-                                        }
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.bottom, 40)
-                                    .padding(.top, 16)
-                                    .background(Color.white)
+                            VStack(alignment: .leading, spacing: 20) {
+                                if viewModel.isLoading {
+                                    ProgressView("Searching spots...")
+                                        .frame(maxWidth: .infinity, alignment: .center)
+                                        .padding(.top, 40)
                                 }
+                                else if (viewModel.filteredPlaces.isEmpty && viewModel.mapKitPlaces.isEmpty) || viewModel.searchQuery == "" {
+                                    VStack(alignment: .center, spacing: 0) {
+                                        Image("Mascot_3")
+                                            .resizable()
+                                            .frame(width: 310, height: 201)
+                                        
+                                        Text("Place Not found")
+                                            .font(.subheadline)
+                                            .fontWeight(.regular)
+                                            .foregroundStyle(Color(hex: "#8E8E93"))
+                                            .padding(.top, 20)
+                                    }
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                                    .padding(.top, 60)
+                                }
+                                else {
+                                    // 1. SECTION HASIL INTERNAL (JSON)
+                                    if !viewModel.filteredPlaces.isEmpty {
+                                        VStack(alignment: .leading, spacing: 14) {
+//                                            Text("Internal Recommendations")
+//                                                .font(.headline)
+//                                                .foregroundColor(.secondary)
+//                                                .padding(.horizontal, 16)
+                                            
+                                            ForEach(viewModel.filteredPlaces) { place in
+                                                SearchFoodCard(culinaryPlace: place)
+                                            }
+                                        }
+                                        .padding(.horizontal, 16)
+                                    }
+                                    
+                                    // 2. SECTION HASIL MAPKIT (APPLE MAPS)
+//                                    if !viewModel.mapKitPlaces.isEmpty {
+//                                        VStack(alignment: .leading, spacing: 12) {
+//                                            Text("Results from Apple Maps")
+//                                                .font(.headline)
+//                                                .foregroundColor(.secondary)
+//                                                .padding(.horizontal, 16)
+//                                                .padding(.top, 10)
+//
+//                                            ForEach(viewModel.mapKitPlaces, id: \.self) { item in
+//                                                VStack(alignment: .leading, spacing: 4) {
+//                                                    Text(item.name ?? "Unknown Place")
+//                                                        .font(.headline)
+//                                                        .foregroundColor(.primary)
+//                                                    Text(item.placemark.title ?? "")
+//                                                        .font(.caption)
+//                                                        .foregroundColor(.secondary)
+//                                                }
+//                                                .padding()
+//                                                .frame(maxWidth: .infinity, alignment: .leading)
+//                                                .background(Color(.systemGray6))
+//                                                .cornerRadius(12)
+//                                                .padding(.horizontal, 16)
+//                                            }
+//                                        }
+//                                    }
+                                }
+                                
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 16)
+                            .padding(.bottom, 40)
+                            .background(Color.white)
 
-                        } header: {
+                        }
+                        header: {
                             // MARK: - SEARCH BAR
                             VStack(spacing: 0) {
-                                HStack() {
+                                HStack {
                                     HStack(spacing: 12) {
                                         Image(systemName: "magnifyingglass")
                                             .foregroundStyle(.secondary)
                                         
-                                        TextField("Search", text: $search)
+                                        // onChange memicu pencarian realtime saat user mengetik teks
+                                        TextField("Search", text: $viewModel.searchQuery)
+                                            .onChange(of: viewModel.searchQuery) { _, newValue in
+                                                viewModel.search(query: newValue)
+                                            }
                                             .onSubmit {
-                                                AppRoute.push(.search(query: ""))
+                                                viewModel.search(query: viewModel.searchQuery)
                                             }
                                         
                                         Image(systemName: "mic.fill")
@@ -116,27 +170,11 @@ struct SearchView2: View {
                                     .frame(height: 44)
                                     .background(.white)
                                     .clipShape(Capsule())
-                                    .padding(.leading, 16)
-                                    .padding(.trailing, 16)
-                                    
-                                    Button(action: {
-                                        print("Button Tapped!")
-                                    }) {
-                                        HStack(spacing: 8) {
-                                            Image(systemName: "xmark")
-                                                .font(.title3)
-                                        }
-                                    }
-                                    .padding(14)
-                                    .foregroundStyle(.black)
-                                    .glassEffect()
-                                    .padding(.trailing, 16)
+                                    .padding(.horizontal, 16)
                                 }
                             }
-                            // Mengatur ganjalan atas agar pas di bawah dynamic island hanya saat status sticky aktif
                             .padding(.top, isHeaderSticky ? topSafeArea + 10 : 10)
                             .padding(.bottom, 10)
-                            // Ubah warna background container terluar
                             .background(isHeaderSticky ? Color(hex: "#4B08B5") : Color.clear)
                             .animation(.easeOut(duration: 0.15), value: isHeaderSticky)
                         }
@@ -150,12 +188,16 @@ struct SearchView2: View {
                 return geometry.contentOffset.y
             } action: { oldValue, newValue in
                 self.scrollOffset = newValue
-                //print("Scroll Offset Terdeteksi: \(scrollOffset) | Sticky: \(isHeaderSticky)")
+            }
+        }
+        .onAppear() {
+            if (query != "") {
+                viewModel.search(query: query)
             }
         }
     }
 }
 
 #Preview {
-    SearchView2(query: "Hello World")
+    SearchView2(query: "")
 }

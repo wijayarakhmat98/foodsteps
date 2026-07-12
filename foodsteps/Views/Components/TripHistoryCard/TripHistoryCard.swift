@@ -7,53 +7,65 @@
 
 import SwiftUI
 
+import SwiftUI
+
 struct TripHistoryCard: View {
     var urls: [String]?
-    var tripName: String?
+    var trip: Trip
     
+    // Grid 2x2: Kiri dan Kanan
     let columns = [
         GridItem(.flexible(), spacing: 6),
         GridItem(.flexible(), spacing: 6)
     ]
     
     var body: some View {
-        VStack(alignment: .leading) {
-            LazyVGrid(
-                columns: columns,
-                alignment: .leading,
-                spacing: 6
-            ) {
-                if let safeUrls = urls {
-                    ForEach(safeUrls.indices, id: \.self) { index in
-                        // 1. Buat kotak transparan sebagai jangkar ukuran (1:1)
+        VStack(alignment: .leading, spacing: 0) {
+            // Kontainer Grid Gambar (Tetap berjumlah 4 kotak)
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
+                ForEach(0..<4, id: \.self) { index in
+                    // Gunakan fungsi pengecekan aman, apakah index tersebut ada datanya di array urls
+                    if let safeUrls = urls, index < safeUrls.count {
+                        // JIKA ADA GAMBAR: Tampilkan RemoteImageView
                         Color.clear
                             .aspectRatio(1, contentMode: .fill)
-                            // 2. Tempelkan gambar di atas kotak transparan tersebut
                             .overlay(
                                 RemoteImageView(
-                                    url: urls![index] ?? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAE1JSdDBFs2lBCjg_Hvx8dcvMtYX5opaYy4ErQIx22QjdZt1C7h0JkENr5-EnWuwab-OP9mzUnB9WC1tylzTz7PvlKYXAy9bPBZtUynGKh5xNIOw6U9PgLwk8jh5be_y3gCx0QkSg=w122-h92-k-no",
+                                    url: safeUrls[index],
                                     cornerRadius: 0
                                 )
-                                // Pastikan gambarnya mengisi penuh ruang overlay
                                 .scaledToFill()
                             )
-                            // 3. Potong paksa semua yang meluber keluar dari batas kotak
-                            .clipShape(RoundedRectangle(cornerRadius: 0))
+                            .clipped() // Mencegah gambar off-bounds keluar dari kotak grid
+                    } else {
+                        // JIKA KOSONG / PLACEHOLDER: Kotak abu-abu dengan ikon foto di tengah
+                        ZStack {
+                            Color(.systemGray5) // Warna background abu-abu bawaan iOS
+                            
+                            Image(systemName: "photo")
+                                .font(.system(size: 20))
+                                .foregroundColor(.gray)
+                        }
+                        .aspectRatio(1, contentMode: .fill)
                     }
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .padding(.bottom, 8)
-//            .padding(.horizontal, 16)
+            .clipShape(RoundedRectangle(cornerRadius: 12)) // Memotong sudut terluar dari susunan grid gambar
+            .padding(.bottom, 10)
             
-            Text(tripName ?? "Dummy Trip Name")
+            // Nama Trip
+            Text(trip.name ?? "Dummy Trip Name")
                 .font(.headline)
-                .fontWeight(.semibold)
-//                .padding(.horizontal, 16)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
+                .lineLimit(1) // Membatasi agar teks nama trip tidak merusak layout ke bawah
+        }
+        .onTapGesture {
+            AppRoute.push(.tripDetail(trip: trip))
         }
     }
 }
 
-#Preview {
-    TripHistoryCard(urls: ["", "", "", ""])
-}
+//#Preview {
+//    TripHistoryCard(urls: [])
+//}

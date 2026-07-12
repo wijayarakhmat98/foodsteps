@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct TripHistoryView: View {
     
-    let tripHistory: [Int] = [1];
+    @StateObject private var viewModel = TripHistoryViewModel(context: dataController.container.viewContext)
+    
     let columns = [
             GridItem(.flexible(), spacing: 12),
             GridItem(.flexible(), spacing: 12)
@@ -52,7 +54,7 @@ struct TripHistoryView: View {
                     )
             )
             
-            if tripHistory.isEmpty {
+            if viewModel.trips.isEmpty {
                 VStack(spacing: 0) {
                     Image("Mascot_3")
                         .resizable()
@@ -78,39 +80,33 @@ struct TripHistoryView: View {
                         spacing: 20
                     ) {
                         
-                        let allUrls = restaurants.compactMap { $0["image_url"] as? String }
+//                        let allUrls = restaurants.compactMap { $0["image_url"] as? String }
 
-                        ForEach(0..<allUrls.count / 4, id: \.self) { chunkIndex in
-                            let startIndex = chunkIndex * 4
-                            let endIndex = min(startIndex + 4, allUrls.count)
-                            let chunkUrls = Array(allUrls[startIndex..<endIndex])
+                        ForEach(viewModel.trips) { trip in
                             
                             TripHistoryCard(
-                                urls: chunkUrls,
-                                tripName: "Trip Culinary \(chunkIndex + 1)"
+                                urls: viewModel.getMax4PlaceImageUrl(for: trip),
+//                                tripName: trip.name
+                                trip: trip
                             )
                         }
                     }
-//                    .padding(.bottom, 16)
                     .padding(.horizontal, 16)
                     .padding(.top, 20)
                     .padding(.bottom, 180)
                 }
                 .padding(.horizontal, 0)
-//                .contentMargins(42)
             }
         }
         .ignoresSafeArea()
         .sheet(isPresented: $showBottomSheet) {
-            BottomCreateTripView(showDialog: $showBottomSheet)
-                // 4. Kunci ini! Memaksa sheet cuma kebuka setengah layar (.medium)
+            BottomCreateTripView(viewModel: viewModel, showDialog: $showBottomSheet)
                 .presentationDetents([.height(520)])
-                // Opsional: Menambahkan garis kecil penarik di atas sheet
                 .presentationDragIndicator(.visible)
         }
     }
 }
 
 #Preview {
-    TripView()
+    TripHistoryView()
 }

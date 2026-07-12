@@ -9,8 +9,9 @@
 import Foundation
 import CoreLocation
 import MapKit
+import Combine
 
-class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+class UserLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var liveCoordinates: [CLLocationCoordinate2D] = []
     
@@ -84,6 +85,26 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             DispatchQueue.main.async {
                 self.livePathCoordinates.append(location.coordinate)
             }
+        }
+    }
+    
+    func makeWaypoints(from trip: Trip) -> [Waypoint] {
+        guard let stops = trip.stops as? Set<Stop> else {
+            return []
+        }
+
+        return stops.compactMap { stop in
+            guard let location = stop.location else {
+                return nil
+            }
+
+            return Waypoint(
+                name: stop.displayName,
+                coordinate: CLLocationCoordinate2D(
+                    latitude: location.latitude,
+                    longitude: location.longitude
+                )
+            )
         }
     }
 }

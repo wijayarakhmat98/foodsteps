@@ -6,16 +6,20 @@ struct HomeView2: View {
     @State private var scrollOffset: CGFloat = 0
     
     @State private var isSearchState: Bool = false
+    
+    @State private var viewModel = HomeViewModel()
 
     let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
     ]
 
-    // Evaluasi status sticky berdasarkan offset scroll
-    // Jika scroll sudah berjalan lebih dari 105pt, nyalakan status sticky
     private var isHeaderSticky: Bool {
         scrollOffset > 185
+    }
+    
+    init() {
+        self.viewModel.loadCulinaryPlaces()
     }
 
     var body: some View {
@@ -34,6 +38,8 @@ struct HomeView2: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 320, height: 182)
+                            .scaleEffect(x: -1, y: 1)
+                            .offset(x: 120)
                     }
                     .background(
                         Color(hex: "#4B08B5")
@@ -74,22 +80,23 @@ struct HomeView2: View {
                                             .fontWeight(.semibold)
                                             .foregroundStyle(Color(hex: "#4B08B5"))
                                         Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .foregroundStyle(Color(hex: "#4B08B5"))
+//                                        Image(systemName: "chevron.right")
+//                                            .foregroundStyle(Color(hex: "#4B08B5"))
                                     }
                                     .padding(.horizontal, 16)
                                     .padding(.top, 20)
 
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         HStack(spacing: 16) {
-                                            ForEach(0..<10, id: \.self) { index in
-                                                let data = restaurants[index + 5]
-                                                HorizontalFoodCard(
-                                                    url: data["image_url"] as? String ?? "",
-                                                    title: data["name"] as? String ?? "",
-                                                    type: data["type"] as? String ?? "",
-                                                    rating: data["rating"] as? Double ?? 4.7
-                                                )
+                                            if viewModel.isLoading {
+                                                ForEach(0..<4, id: \.self) { _ in
+                                                    HorizontalFoodCardSkeleton()
+                                                }
+                                            } else {
+                                                // Pas data beres di-load, ambil indeks 17-27 secara aman
+                                                ForEach(viewModel.culinaryPlaces.dropFirst(17).prefix(10)) { place in
+                                                    HorizontalFoodCard(culinaryPlace: place)
+                                                }
                                             }
                                         }
                                         .padding(.horizontal, 16)
@@ -105,15 +112,14 @@ struct HomeView2: View {
                                     .padding(.horizontal, 16)
 
                                 LazyVGrid(columns: columns, spacing: 12) {
-                                    ForEach(restaurants.indices, id: \.self) { index in
-                                        let data = restaurants[index]
-                                        VerticalFoodCard(
-                                            url: data["image_url"] as? String ?? "",
-                                            title: data["name"] as? String ?? "",
-                                            type: data["type"] as? String ?? "",
-                                            comment: data["comment"] as? String ?? "",
-                                            rating: data["rating"] as? Double ?? 4.7
-                                        )
+                                    if viewModel.isLoading {
+                                        ForEach(0..<4, id: \.self) { _ in
+                                            VerticalFoodCardSkeleton()
+                                        }
+                                    } else {
+                                        ForEach(viewModel.culinaryPlaces) { place in
+                                            VerticalFoodCard(culinaryPlace: place)
+                                        }
                                     }
                                 }
                                 .padding(.horizontal, 16)
@@ -130,7 +136,7 @@ struct HomeView2: View {
 
                                     TextField("Search", text: $search)
                                         .onSubmit {
-                                            AppRoute.push(.search(query: ""))
+                                            AppRoute.push(.search(query: search))
                                         }
 
                                     Image(systemName: "mic.fill")
@@ -163,4 +169,8 @@ struct HomeView2: View {
             }
         }
     }
+}
+
+#Preview {
+    HomeView2()
 }

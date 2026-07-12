@@ -1,3 +1,11 @@
+//
+//  LocationHelper.swift
+//  foodsteps
+//
+//  Created by Nazwa Sapta Pradana on 11/07/26.
+//
+
+
 import MapKit
 
 struct LocationHelper {

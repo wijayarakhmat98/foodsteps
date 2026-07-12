@@ -9,13 +9,7 @@ import SwiftUI
 
 struct VerticalFoodCard: View {
     
-    var url: String?;
-    var title: String?;
-    var location: String?;
-    var type: String?;
-    var comment: String?;
-    var rating: Double?;
-    
+    var culinaryPlace: CulinaryPlace;
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             
@@ -25,7 +19,7 @@ struct VerticalFoodCard: View {
                 //                    .fill(.gray)
                 //                    .frame(height: 110)
                 RemoteImageView(
-                    url: url ?? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAE1JSdDBFs2lBCjg_Hvx8dcvMtYX5opaYy4ErQIx22QjdZt1C7h0JkENr5-EnWuwab-OP9mzUnB9WC1tylzTz7PvlKYXAy9bPBZtUynGKh5xNIOw6U9PgLwk8jh5be_y3gCx0QkSg=w122-h92-k-no",
+                    url: culinaryPlace.imageUrl,
                     cornerRadius: 16
                 )
                 .frame(maxWidth: .infinity)
@@ -56,18 +50,18 @@ struct VerticalFoodCard: View {
                 .padding(.top, 10)
             }
             
-            Text(title ?? "Naked Papa")
+            Text(culinaryPlace.name.limitToWords(7))
                 .font(.headline)
                 .padding(.horizontal, 16)
             
             HStack(spacing: 4) {
-                Text(location ?? "BSD")
+                Text("BSD")
                     .font(.caption)
                 
                 Text(".")
                     .font(.caption)
                 
-                Text(type ?? "Cafe and Dessert")
+                Text(culinaryPlace.filteredType)
                     .font(.caption)
             }
             .padding(.horizontal, 16)
@@ -77,7 +71,7 @@ struct VerticalFoodCard: View {
                 Image(systemName: "star.fill")
                     .foregroundStyle(Color(hex: "#FF8F14"))
                     .font(.system(size: 12))
-                Text((rating ?? 4.7), format: .number.precision(.fractionLength(1)))
+                Text((culinaryPlace.rating), format: .number.precision(.fractionLength(1)))
                     .font(.system(size: 14, weight: .bold))
             }
             .padding(.horizontal, 16)
@@ -86,7 +80,7 @@ struct VerticalFoodCard: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             
-            Text(comment ?? "Teo and 12 friends are tracking this spot.")
+            Text((culinaryPlace.reviews.first?.comment ?? "").limitToWords(15))
                 .padding(.horizontal, 16)
                 .font(.subheadline)
                 .padding(.bottom, 24)
@@ -105,12 +99,12 @@ struct VerticalFoodCard: View {
             )
         )
         .onTapGesture {
-            AppRoute.push(.placeDetail)
+            AppRoute.push(.placeDetail(culinaryPlace: culinaryPlace))
         }
 //        .frame(height: 180)
     }
 }
 
-#Preview {
-    VerticalFoodCard()
-}
+//#Preview {
+//    VerticalFoodCard()
+//}

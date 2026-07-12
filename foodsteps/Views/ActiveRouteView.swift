@@ -16,6 +16,8 @@ struct ActiveRouteView: View {
     /// The sheet's resting height, updated once a drag ends.
     @State private var sheetHeight: CGFloat = 300
     @GestureState private var dragTranslation: CGFloat = 0
+    
+    @StateObject private var userLocationManager = UserLocationManager()
 
     private let minSheetHeight: CGFloat = 170
     private let handleAreaHeight: CGFloat = 28
@@ -80,6 +82,7 @@ struct ActiveRouteView: View {
 
             if !routePlanner.isNavigating {
                 routePlanner.startNavigation()
+                userLocationManager.startRecording()
             }
 
             if let stop = routePlanner.currentNavigationStop {
@@ -119,14 +122,22 @@ struct ActiveRouteView: View {
 
     private var mapLayer: some View {
         Map(position: $mapPosition) {
-
+            
             UserAnnotation()
-
+            
+            // 🔴 LIVE TRACKING USER POLYLINE (Garis Biru Tracker)
+            if !userLocationManager.livePathCoordinates.isEmpty {
+                MapPolyline(coordinates: userLocationManager.livePathCoordinates)
+                    .stroke(.blue.opacity(0.8), lineWidth: 6)
+            }
+            
+            // RUTE TRIP PLANNER UTAMA (Garis Ungu Anda)
             if let route = routePlanner.currentNavigationLeg {
                 MapPolyline(route)
                     .stroke(Color.brandPurple, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
             }
-
+            
+            // PIN MEETING POINT
             if let start = trip.meetingPointCoordinate {
                 Annotation(meetingPointName ?? "Start", coordinate: start.coordinate) {
                     ZStack {
@@ -138,8 +149,10 @@ struct ActiveRouteView: View {
                     .shadow(radius: 2)
                 }
             }
-
+            
+            // PIN DESTINASI-DESTINASI (Urutan Stop)
             ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
+                // Menggunakan properti baru displayNameOnly (yang menghilangkan info URL gambar)
                 Annotation(stop.displayName, coordinate: stop.mapItem.placemark.coordinate) {
                     ZStack {
                         Circle().fill(Color.brandPurple).frame(width: 24, height: 24)
@@ -150,14 +163,41 @@ struct ActiveRouteView: View {
                     .shadow(radius: 2)
                 }
             }
-
         }
         .mapStyle(.standard(elevation: .realistic))
         .mapControls {
             MapCompass()
             MapScaleView()
+            MapUserLocationButton()
         }
     }
+    
+    private var distanceIndicatorPanel: some View {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("LIVE TRACKING")
+                        .font(.caption2).bold().foregroundColor(.gray)
+                    Text(String(format: "%.2f KM", userLocationManager.totalDistance))
+                        .font(.title).bold().foregroundColor(.orange)
+                }
+                Spacer()
+                if userLocationManager.isRecording {
+                    HStack {
+                        Circle()
+                            .fill(userLocationManager.isPaused ? Color.yellow : Color.red)
+                            .frame(width: 8, height: 8)
+                        Text(userLocationManager.isPaused ? "PAUSED" : "REC")
+                            .font(.caption).bold()
+                            .foregroundColor(userLocationManager.isPaused ? .yellow : .red)
+                    }
+                }
+            }
+            .padding()
+            .background(.ultraThinMaterial)
+            .cornerRadius(14)
+            .padding(.horizontal)
+            .padding(.top, 10)
+        }
 
     // MARK: - Header / status
 
@@ -316,6 +356,7 @@ struct ActiveRouteView: View {
 
             if routePlanner.isPaused {
                 Button {
+                    userLocationManager.resumeRecording()
                     routePlanner.resumeNavigation()
                 } label: {
                     Text("Continue")
@@ -328,6 +369,7 @@ struct ActiveRouteView: View {
                 }
             } else {
                 Button {
+                    userLocationManager.pauseRecording()
                     routePlanner.pauseNavigation()
                 } label: {
                     Text("Pause")
@@ -341,7 +383,9 @@ struct ActiveRouteView: View {
             }
 
             Button {
-                finishTrip()
+//                finishTrip()
+                userLocationManager.stopRecording()
+                AppRoute.replace(.mapRoute(wayPoints: userLocationManager.makeWaypoints(from: trip), pathCoordinates: userLocationManager.livePathCoordinates))
             } label: {
                 Text("Finish")
                     .font(.headline)
@@ -353,6 +397,20 @@ struct ActiveRouteView: View {
                             .stroke(Color.brandPurple, lineWidth: 1.5)
                     )
             }
+            
+//            Button {
+//                userLocationManager.startRecording()
+//            } label: {
+//                Text("Start")
+//                    .font(.headline)
+//                    .foregroundColor(.brandPurple)
+//                    .frame(maxWidth: .infinity)
+//                    .padding(.vertical, 14)
+//                    .background(
+//                        RoundedRectangle(cornerRadius: 14)
+//                            .stroke(Color.brandPurple, lineWidth: 1.5)
+//                    )
+//            }
 
         }
         .padding()

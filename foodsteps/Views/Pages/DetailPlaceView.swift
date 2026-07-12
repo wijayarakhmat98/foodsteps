@@ -9,9 +9,9 @@ import SwiftUI
 import MapKit
 
 struct DetailPlaceView: View {
-    let url: String? = nil
+    var culinaryPlace: CulinaryPlace
     
-    private let placeCoordinate = CLLocationCoordinate2D(
+    private var placeCoordinate = CLLocationCoordinate2D(
         latitude: -6.175392,
         longitude: 106.827153
     )
@@ -19,10 +19,17 @@ struct DetailPlaceView: View {
     // 3. Atur posisi kamera peta agar fokus ke koordinat tersebut
     @State private var position: MapCameraPosition
     
-    init() {
+    @State private var showBottomSheet = false
+    
+    init(culinaryPlace: CulinaryPlace) {
+        self.culinaryPlace = culinaryPlace
+        
+        self.placeCoordinate = CLLocationCoordinate2D(
+            latitude: culinaryPlace.latitude, longitude: culinaryPlace.longitude
+        )
         // Mengatur posisi awal kamera peta (jarak pandang sekitar 500 meter)
         _position = State(initialValue: .region(MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: -6.175392, longitude: 106.827153),
+            center: CLLocationCoordinate2D(latitude: culinaryPlace.latitude, longitude: culinaryPlace.longitude),
             latitudinalMeters: 200,
             longitudinalMeters: 200
         )))
@@ -34,35 +41,35 @@ struct DetailPlaceView: View {
                 
                 ZStack(alignment: .topLeading) {
                     RemoteImageView(
-                        url: url ?? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAE1JSdDBFs2lBCjg_Hvx8dcvMtYX5opaYy4ErQIx22QjdZt1C7h0JkENr5-EnWuwab-OP9mzUnB9WC1tylzTz7PvlKYXAy9bPBZtUynGKh5xNIOw6U9PgLwk8jh5be_y3gCx0QkSg=w122-h92-k-no",
+                        url: culinaryPlace.imageUrl,
                         height: 300,
                         cornerRadius: 0
                     )
                     .padding(.horizontal, -4)
                     
-                    Button(action: {
-                        print("Button Tapped!")
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .bold))
-                            .padding(12)
-                            .background(.white)
-                            .foregroundStyle(.black)
-                            .clipShape(Circle())
-                            .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
-                    }
-                    .padding(.top, 60)
-                    .padding(.leading, 16)
+//                    Button(action: {
+//                        print("Button Tapped!")
+//                    }) {
+//                        Image(systemName: "chevron.left")
+//                            .font(.system(size: 18, weight: .bold))
+//                            .padding(12)
+//                            .background(.white)
+//                            .foregroundStyle(.black)
+//                            .clipShape(Circle())
+//                            .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+//                    }
+//                    .padding(.top, 60)
+//                    .padding(.leading, 16)
                 }
                 
                 HStack(alignment: .top,) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Futago Ya")
+                        Text(culinaryPlace.name)
                             .font(.title)
                             .fontWeight(.bold)
                         
                         HStack(spacing: 20) {
-                            Text("Ramen Bar")
+                            Text(culinaryPlace.filteredType)
                                 .font(.callout)
                                 .foregroundColor(.secondary)
                             HStack (alignment: .center, spacing: 4) {
@@ -98,7 +105,7 @@ struct DetailPlaceView: View {
                     
                     HStack(alignment: .top,) {
                         Image(systemName: "mappin")
-                        Text("2, Jl. Sultan Hasanuddin Dalam No.24, RT.3/RW.1, Melawai, Kec. Kby. Baru, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12160")
+                        Text(culinaryPlace.formattedAddress)
                             .font(.footnote)
                     }
                     .padding(.horizontal, 16)
@@ -108,46 +115,49 @@ struct DetailPlaceView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 5))
                 .padding(.horizontal, 16)
                 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("Opening Hours")
                         .font(.subheadline)
                         .bold()
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
                     
-                    HStack() {
-                        Text("Monday - Friday")
-                            .font(.subheadline)
-                            .bold()
-                        
-                        Spacer()
-                        
-                        Text("8.00 AM - 10.00 PM")
-                          .font(.subheadline)
-                          .bold()
+                    if culinaryPlace.groupedOpeningHours.isEmpty {
+                        // Jaga-jaga kalau datanya kosong
+                        HStack {
+                            Text("Information not available")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                    } else {
+                        // Melakukan perulangan otomatis berdasarkan grup hari & jam buka
+                        ForEach(culinaryPlace.groupedOpeningHours, id: \.days) { group in
+                            HStack {
+                                Text(group.days)
+                                    .font(.subheadline)
+                                    .bold()
+                                
+                                Spacer()
+                                
+                                Text(group.hours)
+                                    .font(.subheadline)
+                                    .bold()
+                            }
+                            .padding(.horizontal, 16)
+                            // Kasih padding bottom cuma di item paling terakhir grup
+                            .padding(.bottom, group.days == culinaryPlace.groupedOpeningHours.last?.days ? 16 : 0)
+                        }
                     }
-                    .padding(.horizontal, 16)
-                    
-                    HStack() {
-                        Text("Saturday - Sunday")
-                            .font(.subheadline)
-                            .bold()
-                        
-                        Spacer()
-                        
-                        Text("8.00 AM - 10.00 PM")
-                          .font(.subheadline)
-                          .bold()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
                 }
                 .background(Color(hex: "#FFF5EB"))
                 .clipShape(RoundedRectangle(cornerRadius: 5))
                 .padding(.horizontal, 16)
                 
                 Button(action: {
-                    // Aksi Button A
+                   showBottomSheet = true
                 }) {
                     Text("Add To Trip")
                         .fontWeight(.bold)
@@ -161,10 +171,15 @@ struct DetailPlaceView: View {
                 
             }
         }
-        .ignoresSafeArea(edges: .top) // Gambar full menembus status bar atas
+        .ignoresSafeArea(edges: .top)
+        .sheet(isPresented: $showBottomSheet) {
+            TripBottomView(culinaryPlace: culinaryPlace, showDialog: $showBottomSheet)
+                .presentationDetents([.height(520)])
+                .presentationDragIndicator(.visible)
+        }
     }
 }
 
-#Preview {
-    DetailPlaceView()
-}
+//#Preview {
+//    DetailPlaceView()
+//}

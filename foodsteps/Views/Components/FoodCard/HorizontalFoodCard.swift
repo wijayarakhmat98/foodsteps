@@ -9,29 +9,20 @@ import SwiftUI
 
 struct HorizontalFoodCard: View {
 
-    var url: String?
-    var title: String?
-    var location: String?
-    var type: String?
-    var rating: Double?
+    var culinaryPlace: CulinaryPlace
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
 
             ZStack(alignment: .topTrailing) {
                 RemoteImageView(
-                    url: url ?? "https://lh3.googleusercontent.com/gps-cs-s/APNQkAE1JSdDBFs2lBCjg_Hvx8dcvMtYX5opaYy4ErQIx22QjdZt1C7h0JkENr5-EnWuwab-OP9mzUnB9WC1tylzTz7PvlKYXAy9bPBZtUynGKh5xNIOw6U9PgLwk8jh5be_y3gCx0QkSg=w122-h92-k-no",
+                    url: culinaryPlace.imageUrl,
                     cornerRadius: 16
                 )
-                .frame(height: 120) // 👈 penting: kunci tinggi image
-
-//                Image(systemName: "heart")
-//                    .font(.system(size: 20))
-//                    .foregroundStyle(Color(hex: "#FF8F14"))
-//                    .padding(10)
+                .frame(height: 120)
             }
 
-            Text(title ?? "Naked Papa")
+            Text(culinaryPlace.name.limitToWords(7))
                 .font(.headline)
                 .lineLimit(2)
 
@@ -42,7 +33,7 @@ struct HorizontalFoodCard: View {
                 Text(".")
                     .font(.caption)
 
-                Text(type ?? "Cafe and Dessert")
+                Text(culinaryPlace.filteredType)
                     .font(.caption)
                     .lineLimit(1)
             }
@@ -52,7 +43,7 @@ struct HorizontalFoodCard: View {
                     .foregroundStyle(Color(hex: "#FF8F14"))
                     .font(.system(size: 12))
 
-                Text((rating ?? 4.7), format: .number.precision(.fractionLength(1)))
+                Text((culinaryPlace.rating), format: .number.precision(.fractionLength(1)))
                     .font(.system(size: 14, weight: .bold))
             }
 
@@ -68,11 +59,11 @@ struct HorizontalFoodCard: View {
         )
         .padding(.vertical, 10)
         .onTapGesture {
-            AppRoute.push(.placeDetail)
+            AppRoute.push(.placeDetail(culinaryPlace: culinaryPlace))
         }
     }
 }
 
-#Preview {
-    HorizontalFoodCard()
-}
+//#Preview {
+//    HorizontalFoodCard()
+//}

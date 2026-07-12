@@ -8,42 +8,73 @@
 import SwiftUI
 
 struct SearchFoodCard: View {
+    let culinaryPlace: CulinaryPlace
+    
+    // State untuk menampung teks jarak dari MapKit
+    @State private var distanceString: String = "Loading..."
+    
+    // Koordinat dummy user yang kamu berikit (BSD)
+    private let userLatitude = -6.302546057945934
+    private let userLongitude = 106.6520469974770
+    
     var body: some View {
         HStack(alignment: .center) {
             RemoteImageView(
-                url: "https://lh3.googleusercontent.com/gps-cs-s/APNQkAE1JSdDBFs2lBCjg_Hvx8dcvMtYX5opaYy4ErQIx22QjdZt1C7h0JkENr5-EnWuwab-OP9mzUnB9WC1tylzTz7PvlKYXAy9bPBZtUynGKh5xNIOw6U9PgLwk8jh5be_y3gCx0QkSg=w122-h92-k-no",
+                url: culinaryPlace.imageUrl,
                 height: 70,
                 cornerRadius: 16
             )
             .frame(width: 79)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("Naked Papa")
+                Text(culinaryPlace.name.limitToWords(8))
                     .font(.headline)
                     .padding(.horizontal, 12)
                 
-                Text("Cafe and Dessert")
+                Text(culinaryPlace.filteredType)
                     .font(.caption)
                     .padding(.horizontal, 12)
                 
                 // Bottom row (star)
                 HStack (alignment: .firstTextBaseline, spacing: 4) {
-                    Text("3 KM")
+                    Text(distanceString)
                         .font(.caption)
                         .padding(.trailing, 12)
                     
                     Image(systemName: "star.fill")
                         .foregroundStyle(Color(hex: "#FF8F14"))
                         .font(.system(size: 12))
-                    Text((4.7), format: .number.precision(.fractionLength(1)))
+                    Text((culinaryPlace.rating), format: .number.precision(.fractionLength(1)))
                         .font(.system(size: 14))
                 }
                 .padding(.horizontal, 12)
             }
         }
+        .onTapGesture {
+            AppRoute.push(.placeDetail(culinaryPlace: culinaryPlace))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // 💡 HIT API MAPKIT BEGITU KARTU DI-RENDER DI LAYAR
+        .onAppear {
+            LocationHelper.calculateRouteDistance(
+                userLat: userLatitude,
+                userLng: userLongitude,
+                placeLat: culinaryPlace.latitude,
+                placeLng: culinaryPlace.longitude
+            ) { distance in
+                // Pastikan UI di-update di Main Thread
+                DispatchQueue.main.async {
+                    if let distance = distance {
+                        self.distanceString = String(format: "%.1f KM", distance)
+                    } else {
+                        self.distanceString = "-- KM" // Jika rute tidak ditemukan
+                    }
+                }
+            }
+        }
     }
 }
 
-#Preview {
-    SearchFoodCard()
-}
+//#Preview {
+//    SearchFoodCard()
+//}

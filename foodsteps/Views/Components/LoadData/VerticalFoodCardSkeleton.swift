@@ -1,3 +1,11 @@
+//
+//  VerticalFoodCardSkeleton.swift
+//  foodsteps
+//
+//  Created by Nazwa Sapta Pradana on 11/07/26.
+//
+import SwiftUI
+
 struct VerticalFoodCardSkeleton: View {
     var body: some View {
         HStack(spacing: 12) { // Biasanya vertical card berbentuk list baris kesamping

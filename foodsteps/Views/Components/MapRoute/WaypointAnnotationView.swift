@@ -1,3 +1,11 @@
+//
+//  WaypointAnnotationView.swift
+//  foodsteps
+//
+//  Created by Nazwa Sapta Pradana on 12/07/26.
+//
+import SwiftUI
+
 struct WaypointAnnotationView: View {
     let waypoint: Waypoint
     let onTapCamera: () -> Void

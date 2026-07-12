@@ -1,3 +1,11 @@
+//
+//  ShimmerModifier.swift
+//  foodsteps
+//
+//  Created by Nazwa Sapta Pradana on 11/07/26.
+//
+
+
 import SwiftUI
 
 struct ShimmerModifier: ViewModifier {

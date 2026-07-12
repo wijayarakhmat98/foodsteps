@@ -344,7 +344,7 @@ struct PlacesView: View {
         var body: some View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(stop.location?.name ?? "Unknown")
+                    Text(stop.location?.name?.components(separatedBy: " ::: ").first ?? "Unknown")
                         .font(.headline)
                     Text(stop.location?.address ?? "")
                         .font(.caption)
