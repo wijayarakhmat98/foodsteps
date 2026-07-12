@@ -9,12 +9,12 @@ class DataController {
         _ckContainer!
     }()
 
-    private(set) var userRecordName: String?
+    private(set) var currentUserRecordName: String?
 
     let privatePersistentStore: NSPersistentStore
     let sharedPersistentStore: NSPersistentStore
 
-    init(inMemory: Bool = false) {
+    init() {
         let containerIdentifier = container.persistentStoreDescriptions.first?.cloudKitContainerOptions?.containerIdentifier
 
         guard let storeURL = container.persistentStoreDescriptions.first?.url else {
@@ -25,10 +25,7 @@ class DataController {
 
         let privateStoreURL = baseStoreURL.appendingPathComponent("private.sqlite")
         let privateDescription = NSPersistentStoreDescription(url: privateStoreURL)
-        if inMemory {
-            privateDescription.type = NSInMemoryStoreType
-            privateDescription.cloudKitContainerOptions = nil
-        } else if let containerIdentifier {
+        if let containerIdentifier {
             let privateOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: containerIdentifier)
             privateOptions.databaseScope = .private
             privateDescription.cloudKitContainerOptions = privateOptions
@@ -40,10 +37,7 @@ class DataController {
 
         let sharedStoreURL = baseStoreURL.appendingPathComponent("shared.sqlite")
         let sharedDescription = NSPersistentStoreDescription(url: sharedStoreURL)
-        if inMemory {
-            sharedDescription.type = NSInMemoryStoreType
-            sharedDescription.cloudKitContainerOptions = nil
-        } else if let containerIdentifier {
+        if let containerIdentifier {
             let sharedOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: containerIdentifier)
             sharedOptions.databaseScope = .shared
             sharedDescription.cloudKitContainerOptions = sharedOptions
@@ -66,18 +60,15 @@ class DataController {
         privatePersistentStore = container.persistentStoreCoordinator.persistentStore(for: privateDescription.url!)!
         sharedPersistentStore = container.persistentStoreCoordinator.persistentStore(for: sharedDescription.url!)!
 
-        if inMemory {
-            _ckContainer = nil
-            userRecordName = nil
-        } else if let containerIdentifier {
+        if let containerIdentifier {
             _ckContainer = CKContainer(identifier: containerIdentifier)
             Task {
                 if let userRecordName = try? await _ckContainer?.userRecordID().recordName {
                     await MainActor.run {
-                        self.userRecordName = userRecordName
+                        self.currentUserRecordName = userRecordName
                     }
-//                } else {
-//                    fatalError("Unable to determine current user")
+                } else {
+                    fatalError("Unable to determine current user")
                 }
             }
         } else {

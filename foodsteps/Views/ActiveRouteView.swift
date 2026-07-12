@@ -16,9 +16,23 @@ struct ActiveRouteView: View {
     /// The sheet's resting height, updated once a drag ends.
     @State private var sheetHeight: CGFloat = 300
     @GestureState private var dragTranslation: CGFloat = 0
+    
+    @StateObject private var userLocationManager = UserLocationManager()
 
     private let minSheetHeight: CGFloat = 170
     private let handleAreaHeight: CGFloat = 28
+
+    // MARK: - Meeting point
+    // Trip no longer carries a meetingPointName, and meetingPointCoordinate
+    // is a CLLocation (not CLLocationCoordinate2D), so we derive the display
+    // name here from the meeting-point Stop's Location.
+    private var meetingPointStop: Stop? {
+        trip.wrappedStops.first { $0.type == StopType.meetingPoint.rawValue }
+    }
+
+    private var meetingPointName: String? {
+        meetingPointStop?.location?.name
+    }
 
     var body: some View {
 
@@ -67,63 +81,39 @@ struct ActiveRouteView: View {
         .onAppear {
 
             if !routePlanner.isNavigating {
-
                 routePlanner.startNavigation()
-
+                userLocationManager.startRecording()
             }
 
             if let stop = routePlanner.currentNavigationStop {
-
                 locationManager.monitorArrival(
                     at: stop.mapItem.placemark.coordinate,
-                    identifier: stop.name
+                    identifier: stop.displayName
                 )
-
             }
 
             updateCamera()
 
             locationManager.onLocationUpdate = { _ in
-
                 DispatchQueue.main.async {
-
-                    routePlanner.updateNavigation(
-                        using: locationManager
-                    )
-
+                    routePlanner.updateNavigation(using: locationManager)
                     updateCamera()
-
                 }
-
             }
 
             locationManager.onRegionEntered = { _ in
-
                 DispatchQueue.main.async {
-
-                    routePlanner.updateNavigation(
-                        using: locationManager
-                    )
-
+                    routePlanner.updateNavigation(using: locationManager)
                     updateCamera()
-
                 }
-
             }
-
         }
-
         .onDisappear {
-
             locationManager.onLocationUpdate = nil
             locationManager.onRegionEntered = nil
-
         }
-
         .onChange(of: routePlanner.currentLegIndex) { _, _ in
-
             updateCamera()
-
         }
 
     }
@@ -132,19 +122,24 @@ struct ActiveRouteView: View {
 
     private var mapLayer: some View {
         Map(position: $mapPosition) {
-
+            
             UserAnnotation()
-
+            
+            // 🔴 LIVE TRACKING USER POLYLINE (Garis Biru Tracker)
+            if !userLocationManager.livePathCoordinates.isEmpty {
+                MapPolyline(coordinates: userLocationManager.livePathCoordinates)
+                    .stroke(.blue.opacity(0.8), lineWidth: 6)
+            }
+            
+            // RUTE TRIP PLANNER UTAMA (Garis Ungu Anda)
             if let route = routePlanner.currentNavigationLeg {
-
                 MapPolyline(route)
                     .stroke(Color.brandPurple, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
-
             }
-
+            
+            // PIN MEETING POINT
             if let start = trip.meetingPointCoordinate {
-
-                Annotation(trip.meetingPointName ?? "Start", coordinate: start) {
+                Annotation(meetingPointName ?? "Start", coordinate: start.coordinate) {
                     ZStack {
                         Circle().fill(Color.black).frame(width: 24, height: 24)
                         Image(systemName: "flag.fill")
@@ -153,12 +148,12 @@ struct ActiveRouteView: View {
                     }
                     .shadow(radius: 2)
                 }
-
             }
-
+            
+            // PIN DESTINASI-DESTINASI (Urutan Stop)
             ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
-
-                Annotation(stop.name, coordinate: stop.mapItem.placemark.coordinate) {
+                // Menggunakan properti baru displayNameOnly (yang menghilangkan info URL gambar)
+                Annotation(stop.displayName, coordinate: stop.mapItem.placemark.coordinate) {
                     ZStack {
                         Circle().fill(Color.brandPurple).frame(width: 24, height: 24)
                         Text("\(index + 1)")
@@ -167,16 +162,42 @@ struct ActiveRouteView: View {
                     }
                     .shadow(radius: 2)
                 }
-
             }
-
         }
         .mapStyle(.standard(elevation: .realistic))
         .mapControls {
             MapCompass()
             MapScaleView()
+            MapUserLocationButton()
         }
     }
+    
+    private var distanceIndicatorPanel: some View {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("LIVE TRACKING")
+                        .font(.caption2).bold().foregroundColor(.gray)
+                    Text(String(format: "%.2f KM", userLocationManager.totalDistance))
+                        .font(.title).bold().foregroundColor(.orange)
+                }
+                Spacer()
+                if userLocationManager.isRecording {
+                    HStack {
+                        Circle()
+                            .fill(userLocationManager.isPaused ? Color.yellow : Color.red)
+                            .frame(width: 8, height: 8)
+                        Text(userLocationManager.isPaused ? "PAUSED" : "REC")
+                            .font(.caption).bold()
+                            .foregroundColor(userLocationManager.isPaused ? .yellow : .red)
+                    }
+                }
+            }
+            .padding()
+            .background(.ultraThinMaterial)
+            .cornerRadius(14)
+            .padding(.horizontal)
+            .padding(.top, 10)
+        }
 
     // MARK: - Header / status
 
@@ -279,19 +300,19 @@ struct ActiveRouteView: View {
                 if let start = trip.meetingPointCoordinate {
                     StopTimelineRow(
                         index: -1,
-                        title: trip.meetingPointName ?? "Your Location",
+                        title: meetingPointName ?? "Your Location",
                         subtitle: "Meeting Point | Start",
                         isLast: routePlanner.orderedStops.isEmpty,
                         placeholderSystemImage: "mappin.and.ellipse",
                         badgeSystemImage: "flag.fill"
                     )
-                    .id(start.latitude)
+                    .id(start.coordinate.latitude)
                 }
 
                 ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
                     StopTimelineRow(
                         index: index,
-                        title: stop.name,
+                        title: stop.displayName,
                         subtitle: subtitle(for: stop, at: index),
                         isLast: index == routePlanner.orderedStops.count - 1,
                         isHighlighted: index == routePlanner.currentLegIndex
@@ -302,7 +323,7 @@ struct ActiveRouteView: View {
         }
     }
 
-    private func subtitle(for stop: RouteStop, at index: Int) -> String {
+    private func subtitle(for stop: Stop, at index: Int) -> String {
         let category = categoryLabel(for: stop.mapItem.pointOfInterestCategory) ?? "Place"
 
         if index == routePlanner.currentLegIndex {
@@ -334,8 +355,8 @@ struct ActiveRouteView: View {
         HStack(spacing: 12) {
 
             if routePlanner.isPaused {
-
                 Button {
+                    userLocationManager.resumeRecording()
                     routePlanner.resumeNavigation()
                 } label: {
                     Text("Continue")
@@ -346,10 +367,9 @@ struct ActiveRouteView: View {
                         .background(Color.brandPurple)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
-
             } else {
-
                 Button {
+                    userLocationManager.pauseRecording()
                     routePlanner.pauseNavigation()
                 } label: {
                     Text("Pause")
@@ -360,11 +380,12 @@ struct ActiveRouteView: View {
                         .background(Color.orange)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
-
             }
 
             Button {
-                finishTrip()
+//                finishTrip()
+                userLocationManager.stopRecording()
+                AppRoute.replace(.mapRoute(wayPoints: userLocationManager.makeWaypoints(from: trip), pathCoordinates: userLocationManager.livePathCoordinates))
             } label: {
                 Text("Finish")
                     .font(.headline)
@@ -376,6 +397,20 @@ struct ActiveRouteView: View {
                             .stroke(Color.brandPurple, lineWidth: 1.5)
                     )
             }
+            
+//            Button {
+//                userLocationManager.startRecording()
+//            } label: {
+//                Text("Start")
+//                    .font(.headline)
+//                    .foregroundColor(.brandPurple)
+//                    .frame(maxWidth: .infinity)
+//                    .padding(.vertical, 14)
+//                    .background(
+//                        RoundedRectangle(cornerRadius: 14)
+//                            .stroke(Color.brandPurple, lineWidth: 1.5)
+//                    )
+//            }
 
         }
         .padding()
@@ -383,23 +418,36 @@ struct ActiveRouteView: View {
     }
 
     private func finishTrip() {
-
         while routePlanner.advanceToNextStop() {
-
             if let next = routePlanner.currentNavigationStop {
-
                 locationManager.monitorArrival(
                     at: next.mapItem.placemark.coordinate,
-                    identifier: next.name
+                    identifier: next.displayName
                 )
-
             }
-
         }
-
     }
 
     // MARK: - Helpers
+    
+    /// Parses the raw MKPointOfInterestCategory into a readable string (e.g., "MKPOICategoryRestaurant" -> "Restaurant")
+    private func categoryLabel(for category: MKPointOfInterestCategory?) -> String? {
+        guard let category = category else { return nil }
+        
+        // Remove the "MKPOICategory" prefix to get a clean UI string
+        let rawString = category.rawValue
+        let cleanString = rawString.replacingOccurrences(of: "MKPOICategory", with: "")
+        
+        // Add spaces before capital letters for camel case categories like "NationalPark" -> "National Park"
+        let readableString = cleanString.replacingOccurrences(
+            of: "([A-Z])",
+            with: " $1",
+            options: .regularExpression,
+            range: cleanString.startIndex..<cleanString.endIndex
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        return readableString.isEmpty ? nil : readableString
+    }
 
     private func remainingStopsCount() -> Int {
         max(routePlanner.orderedStops.count - routePlanner.currentLegIndex, 0)
@@ -413,27 +461,17 @@ struct ActiveRouteView: View {
     }
 
     private func updateCamera() {
-
         guard followUser else { return }
-
         guard let location = locationManager.currentLocation else { return }
 
         mapPosition = .camera(
-
             MapCamera(
-
                 centerCoordinate: location,
-
                 distance: 700,
-
                 heading: 0,
-
                 pitch: 60
-
             )
-
         )
-
     }
 
 }
