@@ -1,4 +1,34 @@
+//
+//  CulinaryPlace.swift
+//  foodsteps
+//
+//  Created by Nazwa Sapta Pradana on 11/07/26.
+//
+
+
 import Foundation
+import MapKit
+
+struct Review: Identifiable, Hashable {
+    let id: String = UUID().uuidString
+    let authorName: String
+    let authorPhoto: String
+    let rating: Int
+    let timeDescription: String
+    let comment: String
+    
+    init(dict: [String: Any]) {
+        let author = dict["authorAttribution"] as? [String: Any]
+        self.authorName = author?["displayName"] as? String ?? "Anonymous"
+        self.authorPhoto = author?["photoUri"] as? String ?? ""
+        
+        self.rating = dict["rating"] as? Int ?? 5
+        self.timeDescription = dict["relativePublishTimeDescription"] as? String ?? ""
+        
+        let textDict = dict["text"] as? [String: Any]
+        self.comment = textDict?["text"] as? String ?? ""
+    }
+}
 
 struct CulinaryPlace: Identifiable {
     let id: String
@@ -24,6 +54,10 @@ struct CulinaryPlace: Identifiable {
     let delivery: Bool
     let dineIn: Bool
     
+    let reviews: [Review]
+    
+    let weekdayDescriptions: [String]
+    
     // Inisialisasi dari [String: Any]
     init(dict: [String: Any]) {
         self.id = dict["id"] as? String ?? UUID().uuidString
@@ -34,8 +68,8 @@ struct CulinaryPlace: Identifiable {
         
         // Parsing koordinat dari objek bertingkat "location"
         let locationDict = dict["location"] as? [String: Any]
-        self.latitude = locationDict["latitude"] as? Double ?? 0.0
-        self.longitude = locationDict["longitude"] as? Double ?? 0.0
+        self.latitude = locationDict?["latitude"] as? Double ?? 0.0
+        self.longitude = locationDict!["longitude"] as? Double ?? 0.0
         
         self.imageUrl = dict["image_url"] as? String ?? ""
         self.rating = dict["rating"] as? Double ?? 0.0
@@ -54,6 +88,19 @@ struct CulinaryPlace: Identifiable {
         self.delivery = dict["delivery"] as? Bool ?? false
         self.dineIn = dict["dineIn"] as? Bool ?? false
         
+        if let reviewsRaw = dict["reviews"] as? [[String: Any]] {
+            // Mapping tiap dictionary review ke dalam struct Review
+            self.reviews = reviewsRaw.map { Review(dict: $0) }
+        } else {
+            self.reviews = []
+        }
+        
+        if let openingHours = dict["regularOpeningHours"] as? [String: Any] {
+            self.weekdayDescriptions = openingHours["weekdayDescriptions"] as? [String] ?? []
+        } else {
+            self.weekdayDescriptions = []
+        }
+        
         // --- LOGIKA REPLACING DELIMITER & HAPUS KATA "RESTAURANT" ---
         let primaryTypeRaw = dict["primaryType"] as? String ?? ""
         self.rawType = primaryTypeRaw
@@ -70,5 +117,55 @@ struct CulinaryPlace: Identifiable {
             // Lakukan .capitalized agar rapi (contoh: "indonesian" -> "Indonesian")
             self.filteredType = cleanType.trimmingCharacters(in: .whitespacesAndNewlines).capitalized
         }
+    }
+    
+    // Properti baru untuk mengelompokkan hari yang jam bukanya sama
+    var groupedOpeningHours: [(days: String, hours: String)] {
+        guard !weekdayDescriptions.isEmpty else { return [] }
+        
+        var tempGroup: [String: [String]] = [:]
+        var dayOrder: [String] = []
+        
+        for desc in weekdayDescriptions {
+            // Pisahkan antara "Hari" dan "Jam Buka" berdasarkan tanda titik dua pertama ":"
+            let components = desc.components(separatedBy: ": ")
+            if components.count >= 2 {
+                let day = components[0].trimmingCharacters(in: .whitespaces)
+                let hours = components[1].trimmingCharacters(in: .whitespaces)
+                    .replacingOccurrences(of: " – ", with: " - ") // Rapikan strip bawaan Google
+                    .replacingOccurrences(of: " ", with: " ")     // Bersihkan whitespace aneh
+                
+                if tempGroup[hours] == nil {
+                    tempGroup[hours] = []
+                }
+                tempGroup[hours]?.append(day)
+                
+                if !dayOrder.contains(hours) {
+                    dayOrder.append(hours)
+                }
+            }
+        }
+        
+        // Format hasilnya menjadi "Monday - Friday" dsb.
+        return dayOrder.compactMap { hours in
+            guard let days = tempGroup[hours], !days.isEmpty else { return nil }
+            
+            if days.count == 7 {
+                return (days: "Everyday", hours: hours)
+            } else if days.count > 1 {
+                return (days: "\(days.first!) - \(days.last!)", hours: hours)
+            } else {
+                return (days: days.first!, hours: hours)
+            }
+        }
+    }
+    
+    func toMKMapItem() -> MKMapItem {
+        return MKMapItem.fromRawData(
+            latitude: self.latitude,
+            longitude: self.longitude,
+            name: self.name + " ::: " + self.imageUrl,
+            address: self.formattedAddress.isEmpty ? self.shortFormattedAddress : self.formattedAddress
+        )
     }
 }
