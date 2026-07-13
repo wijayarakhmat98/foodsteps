@@ -58,6 +58,19 @@ extension Trip {
         }
     }
 
+    /// True once *this* user (identified by their CloudKit record name, same
+    /// as every other `authorRecordName` in the schema) has saved a result
+    /// for this trip. Each participant gets their own `Complete` row, so
+    /// this is independent per-user — one person finishing/saving doesn't
+    /// affect anyone else's view of the trip.
+    ///
+    /// Used by `TripView` to decide whether tapping a trip should go
+    /// straight to `TripFinishedView` (already completed) or into
+    /// `TripInputView`'s Places/Route hub (not yet completed).
+    var hasCurrentUserCompleted: Bool {
+        wrappedCompletes.contains { $0.authorRecordName == dataController.currentUserRecordName }
+    }
+
     var wrappedName: String {
         name ?? erroneousName
     }

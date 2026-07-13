@@ -21,7 +21,11 @@ struct TripView: View {
             }
             .navigationTitle("Trips")
             .navigationDestination(for: Trip.self) { trip in
-                TripInputView(trip: trip)
+                if trip.hasCurrentUserCompleted {
+                    SavedTripFinishedView(trip: trip)
+                } else {
+                    TripInputView(trip: trip)
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

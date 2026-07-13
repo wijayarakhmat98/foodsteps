@@ -17,6 +17,7 @@ struct TripInputView: View {
     @ObservedObject var trip: Trip
 
     @Environment(\.managedObjectContext) private var moc
+    @Environment(\.dismiss) private var dismiss
 
     // MARK: - Core Data Propagation
     // Replaced @FetchRequest with computed properties straight from the ObservedObject.
@@ -63,22 +64,14 @@ struct TripInputView: View {
 
     @State private var showShareView = false
 
-    /// True once *this* user (identified by their CloudKit record name, same
-    /// as every other `authorRecordName` in the schema) has saved a result
-    /// for this trip. Each participant gets their own `Complete` row, so
-    /// this is independent per-user — one person finishing/saving doesn't
-    /// affect anyone else's view of the trip.
-    private var hasCurrentUserCompleted: Bool {
-        trip.wrappedCompletes.contains { $0.authorRecordName == dataController.currentUserRecordName }
-    }
-
-    /// Drives the "already finished" presentation of `TripFinishedView`
-    /// when reopening a trip this user previously saved a result for. Kept
-    /// separate from `routePlanner.isFinished` (which drives the "just
-    /// finished navigating" flow) since this can trigger on a fresh launch
-    /// where `routePlanner` never ran.
-    @State private var showSavedResult = false
-    @State private var savedResultRoutePlanner = RoutePlanner()
+    /// Set right before closing the "trip finished" fullScreenCover when the
+    /// trip was just saved. Read in that cover's `onDismiss`, once the cover
+    /// has actually finished closing, to then pop `TripInputView` itself off
+    /// `TripView`'s stack. Calling `dismiss()` in the same moment as closing
+    /// the cover doesn't reliably work — `TripInputView` is still busy
+    /// presenting a modal at that instant, so the pop request gets dropped
+    /// and you land back on `TripInputView` instead of `TripView`.
+    @State private var dismissAfterFinishedCoverCloses = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -141,28 +134,21 @@ struct TripInputView: View {
         .fullScreenCover(isPresented: Binding(
             get: { routePlanner.isFinished },
             set: { routePlanner.isFinished = $0 }
-        )) {
-            TripFinishedView(
-                trip: trip,
-                visitedStops: finishedStopEntities,
-                routePlanner: routePlanner,
-                participantName: currentParticipantName,
-                onSaveResult: saveTripResult
-            )
-        }
-        // Reopening a trip this user already saved a result for should just
-        // show that saved result, not the Places/Route hub with a "Start
-        // Trip" button. Uses a separate RoutePlanner instance (pre-loaded
-        // with the persisted stop order) since the live `routePlanner`
-        // above never ran this session.
-        .fullScreenCover(isPresented: $showSavedResult) {
-            TripFinishedView(
-                trip: trip,
-                visitedStops: savedResultStopEntities,
-                routePlanner: savedResultRoutePlanner,
-                participantName: currentParticipantName,
-                onSaveResult: { showSavedResult = false }
-            )
+        ), onDismiss: {
+            if dismissAfterFinishedCoverCloses {
+                dismissAfterFinishedCoverCloses = false
+                dismiss()
+            }
+        }) {
+            NavigationStack {
+                TripFinishedView(
+                    trip: trip,
+                    visitedStops: finishedStopEntities,
+                    routePlanner: routePlanner,
+                    participantName: currentParticipantName,
+                    onSaveResult: saveTripResult
+                )
+            }
         }
         .alert("Rename Trip", isPresented: $isRenamingTrip) {
             TextField("Trip name", text: $renameDraft)
@@ -177,10 +163,6 @@ struct TripInputView: View {
         .onAppear {
             locationManager.requestPermissionAndStart()
             syncRoutePlannerOrderIfNeeded()
-            if hasCurrentUserCompleted {
-                savedResultRoutePlanner.orderedStops = savedResultStopEntities
-                showSavedResult = true
-            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange, object: moc)) { notification in
             handleContextObjectsChanged(notification)
@@ -359,7 +341,7 @@ struct TripInputView: View {
         // Complete is tagged with their own authorRecordName (see
         // Complete+Helper), so this is independent per-user — guard against
         // inserting a duplicate if they somehow land here twice.
-        if !hasCurrentUserCompleted {
+        if !trip.hasCurrentUserCompleted {
             Complete.insert(into: moc, trip: trip)
             try? moc.save()
         }
@@ -367,17 +349,14 @@ struct TripInputView: View {
         // Stop.visitedAt/departedAt and Trip.finishedAt no longer exist in
         // the schema. Visit timing stays ephemeral in RoutePlanner for now
         // (TripFinishedView already reads it from there).
+        // Trip is finished and saved — there's nothing left to do on the
+        // Places/Route hub, so leave it entirely and land back on TripView.
+        // (Reopening this trip later now goes straight to TripFinishedView
+        // via TripView's own navigationDestination check.) The actual pop
+        // happens in the fullScreenCover's onDismiss, once it's confirmed
+        // closed — see dismissAfterFinishedCoverCloses above.
+        dismissAfterFinishedCoverCloses = true
         routePlanner.isFinished = false
         navigateToNavigation = false
-    }
-
-    // MARK: - Reopening an already-saved trip
-
-    /// The visited stops for the saved-result screen, restored from the
-    /// persisted `sortOrder` (falls back to the unsorted place stops if no
-    /// order was ever saved).
-    private var savedResultStopEntities: [Stop] {
-        let ordered = trip.wrappedPlaceStopsBySortOrder
-        return ordered.isEmpty ? placeStops : ordered
     }
 }
