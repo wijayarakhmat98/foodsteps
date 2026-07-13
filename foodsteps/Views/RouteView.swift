@@ -178,7 +178,7 @@ struct RouteView: View {
                 Text("\(index + 1)").font(.caption.bold()).foregroundColor(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(stop.displayName)
+                Text(stop.displayName.components(separatedBy: " ::: ").first ?? "Unknow")
                     .font(.subheadline.weight(.semibold))
                 Text(distanceLabel(forLegAt: index))
                     .font(.caption)
