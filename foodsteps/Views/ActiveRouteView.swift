@@ -9,6 +9,7 @@ struct ActiveRouteView: View {
 
     @State private var mapPosition: MapCameraPosition = .automatic
     @State private var followUser = true
+    @State private var showFinishConfirmation = false
     @Environment(\.dismiss) private var dismiss
 
     // MARK: - Draggable sheet
@@ -78,6 +79,23 @@ struct ActiveRouteView: View {
             }
         }
         .toolbar(.hidden, for: .tabBar)
+        .confirmationDialogOverlay(
+            isPresented: $showFinishConfirmation,
+            title: "Finish Trip?",
+            message: "This process cannot be undone.",
+            confirmTitle: "Finish Trip"
+        ) {
+            // Marks the trip finished (routePlanner.isFinished = true),
+            // which TripInputView is watching via its fullScreenCover.
+            // That cover presents TripFinishedView so the user can review
+            // the visited stops and tap "Save Result" — which is what
+            // actually persists the per-user Complete record (see
+            // TripInputView.saveTripResult()). Reopening the trip later
+            // then goes straight to the saved result instead of back into
+            // the Places/Route hub (see AppRoute's tripDetail destination).
+            userLocationManager.stopRecording()
+            finishTrip()
+        }
         .onAppear {
 
             if !routePlanner.isNavigating {
@@ -383,9 +401,11 @@ struct ActiveRouteView: View {
             }
 
             Button {
-//                finishTrip()
-                userLocationManager.stopRecording()
-                AppRoute.replace(.mapRoute(wayPoints: userLocationManager.makeWaypoints(from: trip), pathCoordinates: userLocationManager.livePathCoordinates))
+                // Confirm first — actually finishing (which marks the trip
+                // finished and, via TripInputView's fullScreenCover, jumps
+                // straight to TripFinishedView) happens in the
+                // confirmationDialogOverlay's onConfirm below.
+                showFinishConfirmation = true
             } label: {
                 Text("Finish")
                     .font(.headline)

@@ -23,7 +23,16 @@ enum Route {
         case .placeDetail(let culinaryPlace):
             DetailPlaceView(culinaryPlace: culinaryPlace)
         case .tripDetail(let trip):
-            TripInputView(trip: trip)
+            // Once this user has saved a result for the trip (tapped "Save
+            // Result" on TripFinishedView after finishing it), reopening the
+            // trip should land straight on that saved result instead of
+            // back in the Places/Route planning hub — there's nothing left
+            // to plan. See Trip+Helper's `hasCurrentUserCompleted`.
+            if trip.hasCurrentUserCompleted {
+                SavedTripFinishedView(trip: trip)
+            } else {
+                TripInputView(trip: trip)
+            }
         case .mapRoute(let wayPoints, let pathCoordinates):
             MapRouteView(waypoints: wayPoints, pathCoordinates: pathCoordinates)
         }

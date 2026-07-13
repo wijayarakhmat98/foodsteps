@@ -36,12 +36,8 @@ struct RouteView: View {
     @ViewBuilder
     private var content: some View {
         if placeStops.isEmpty {
-            ContentUnavailableView(
-                "Nothing to Route Yet",
-                systemImage: "map",
-                description: Text("Add stops on the Places tab first.")
-            )
-            .frame(maxHeight: .infinity)
+            NoPlacesEmptyState()
+                .frame(maxHeight: .infinity)
         } else if isPreparingRoute && routePlanner.orderedStops.isEmpty {
             VStack(spacing: 12) {
                 ProgressView()
@@ -69,7 +65,7 @@ struct RouteView: View {
             if let start = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation {
                 Annotation(meetingPointDisplayName ?? "Start", coordinate: start) {
                     ZStack {
-                        Circle().fill(Color.black).frame(width: 28, height: 28)
+                        Circle().fill(Color.brandPurple).frame(width: 28, height: 28)
                         Image(systemName: "mappin")
                             .font(.caption.bold())
                             .foregroundColor(.white)
@@ -81,7 +77,7 @@ struct RouteView: View {
             ForEach(Array(routePlanner.orderedStops.enumerated()), id: \.offset) { index, stop in
                 Annotation(stop.displayName, coordinate: stop.mapItem.placemark.coordinate) {
                     ZStack {
-                        Circle().fill(Color.black).frame(width: 24, height: 24)
+                        Circle().fill(Color.brandPurple).frame(width: 24, height: 24)
                         Text("\(index + 1)")
                             .font(.caption2.bold())
                             .foregroundColor(.white)
@@ -92,7 +88,7 @@ struct RouteView: View {
 
             ForEach(Array(routePlanner.legs.enumerated()), id: \.offset) { _, leg in
                 MapPolyline(leg)
-                    .stroke(.black.opacity(0.6), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                    .stroke(Color.brandPurple.opacity(0.75), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
             }
         }
         .mapStyle(.standard)
@@ -101,18 +97,34 @@ struct RouteView: View {
     // MARK: - Stats
 
     private var routeStatsRow: some View {
-        HStack(spacing: 6) {
-            Text("\(routePlanner.orderedStops.count) stops")
-            Text("·")
-            Text(formattedTotalDistance())
-            Text("·")
-            Text("Distance order")
+        HStack {
+            Text("\(routePlanner.orderedStops.count) stops · \(formattedTotalDistance()) · Distance order")
+                .font(.caption.weight(.medium))
+                .foregroundColor(.brandPurple)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(Color.brandPurpleLight))
+
+            Spacer()
+
+            if !placeStops.isEmpty {
+                Button {
+                    computeRoute {}
+                } label: {
+                    Text(routePlanner.orderedStops.isEmpty ? "Generate Route" : "Regenerate")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.brandPurple)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule().stroke(Color.brandPurple, lineWidth: 1.2)
+                        )
+                }
+                .disabled(isPreparingRoute)
+            }
         }
-        .font(.subheadline)
-        .foregroundColor(.secondary)
         .padding(.horizontal)
         .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func formattedTotalDistance() -> String {
@@ -132,61 +144,64 @@ struct RouteView: View {
                 }
                 .onMove(perform: moveStops)
             } header: {
-                HStack {
-                    Text("Suggested order (by distance)")
-                    Spacer()
-                    // The new manual Generate Route button
-                    if !placeStops.isEmpty {
-                        Button {
-                            computeRoute {}
-                        } label: {
-                            Text(routePlanner.orderedStops.isEmpty ? "Generate Route" : "Regenerate")
-                                .font(.caption.weight(.semibold))
-                                .foregroundColor(.blue)
-                        }
-                        .disabled(isPreparingRoute)
-                    }
-                }
+                Text("Suggested order (by distance)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.brandPurple)
+                    .textCase(nil)
+                    .padding(.leading, -4)
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .contentMargins(.top, 0, for: .scrollContent)
     }
 
     private var routeStartRow: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(Color.black).frame(width: 28, height: 28)
+                Circle().fill(Color.brandPurple).frame(width: 30, height: 30)
                 Image(systemName: "mappin").font(.caption.bold()).foregroundColor(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(meetingPointDisplayName ?? "Your Location")
                     .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.brandPurple)
                 Text("Start")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.brandPurpleLight.opacity(0.6)))
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 
     private func routeStopRow(index: Int, stop: Stop) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(Color.black).frame(width: 28, height: 28)
+                Circle().fill(Color.brandPurple).frame(width: 30, height: 30)
                 Text("\(index + 1)").font(.caption.bold()).foregroundColor(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(stop.displayName.components(separatedBy: " ::: ").first ?? "Unknow")
                     .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.brandPurple)
                 Text(distanceLabel(forLegAt: index))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             Spacer()
+            Image(systemName: "line.3.horizontal")
+                .foregroundColor(.secondary)
         }
-        .padding(.vertical, 4)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.brandPurpleLight.opacity(0.6)))
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 
     private func distanceLabel(forLegAt index: Int) -> String {

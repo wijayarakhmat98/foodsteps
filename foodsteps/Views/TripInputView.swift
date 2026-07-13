@@ -75,7 +75,28 @@ struct TripInputView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            tabSwitcher
+            TripHeaderView(
+                title: trip.name ?? "Trip",
+                tabs: HubTab.allCases.map { ($0, $0.rawValue) },
+                selectedTab: $selectedTab,
+                onBack: { dismiss() },
+                trailing: {
+                    AnyView(
+                        Menu {
+                            Button("Rename Trip") {
+                                renameDraft = trip.name ?? ""
+                                isRenamingTrip = true
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(Color.brandPurple)
+                                .frame(width: 36, height: 36)
+                                .background(Circle().fill(Color.white))
+                        }
+                    )
+                }
+            )
 
             switch selectedTab {
             case .places:
@@ -103,27 +124,8 @@ struct TripInputView: View {
 
             startTripButton
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(selectedTab == .places ? (trip.name ?? "Trip") : "Route")
-                    .font(.headline)
-            }
-            if selectedTab == .places {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button("Rename Trip") {
-                            renameDraft = trip.name ?? ""
-                            isRenamingTrip = true
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
-            }
-        }
         .navigationDestination(isPresented: $navigateToNavigation) {
             ActiveRouteView(
                 trip: trip,
@@ -175,32 +177,6 @@ struct TripInputView: View {
         }
     }
 
-    // MARK: - Tab switcher
-    private var tabSwitcher: some View {
-        HStack(spacing: 4) {
-            ForEach(HubTab.allCases, id: \.self) { tab in
-                Button {
-                    selectedTab = tab
-                } label: {
-                    Text(tab.rawValue)
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(selectedTab == tab ? Color(uiColor: .systemBackground) : Color.clear)
-                        .foregroundColor(selectedTab == tab ? .primary : .secondary)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .shadow(color: .black.opacity(selectedTab == tab ? 0.08 : 0), radius: 3, y: 1)
-                }
-            }
-        }
-        .padding(4)
-        .background(Color(uiColor: .systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal)
-        .padding(.top, 10)
-        .padding(.bottom, 6)
-    }
-
     // MARK: - Shared "Start Trip" button
     private var startTripButton: some View {
         Button(action: startTrip) {
@@ -219,7 +195,7 @@ struct TripInputView: View {
         .font(.headline)
         .foregroundColor(.white)
         .padding(.vertical, 16)
-        .background(Color.black)
+        .background(placeStops.isEmpty || isPreparingRoute ? Color.brandOrange.opacity(0.5) : Color.brandOrange)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .padding()
         .background(.bar)
