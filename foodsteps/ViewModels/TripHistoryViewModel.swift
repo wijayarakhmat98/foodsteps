@@ -128,6 +128,20 @@ class TripHistoryViewModel: NSObject, ObservableObject {
 
         return calendar.date(from: mergedComponents) ?? Date()
     }
+    
+    func getTripWithoutCulinaryPlaceItem(culinaryPlace: CulinaryPlace) -> [Trip] {
+        return trips.filter { trip in
+            let stops = trip.stops as? Set<Stop> ?? []
+            
+            let hasCulinaryPlace = stops.contains { (stop: Stop) in
+                let cleanStopName = stop.displayName.components(separatedBy: " ::: ").first ?? ""
+                    
+                return cleanStopName == culinaryPlace.name
+            }
+            
+            return !hasCulinaryPlace
+        }
+    }
 }
 
 // MARK: - NSFetchedResultsControllerDelegate
