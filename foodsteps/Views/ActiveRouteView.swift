@@ -385,7 +385,7 @@ struct ActiveRouteView: View {
             Button {
 //                finishTrip()
                 userLocationManager.stopRecording()
-                AppRoute.replace(.mapRoute(wayPoints: userLocationManager.makeWaypoints(from: trip), pathCoordinates: userLocationManager.livePathCoordinates))
+                AppRoute.replace(.mapRoute( wayPoints: userLocationManager.makeWaypoints(from: trip), pathCoordinates: userLocationManager.livePathCoordinates, trip: trip))
             } label: {
                 Text("Finish")
                     .font(.headline)
