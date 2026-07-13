@@ -401,11 +401,10 @@ struct ActiveRouteView: View {
             }
 
             Button {
-                // Confirm first — actually finishing (which marks the trip
-                // finished and, via TripInputView's fullScreenCover, jumps
-                // straight to TripFinishedView) happens in the
-                // confirmationDialogOverlay's onConfirm below.
                 showFinishConfirmation = true
+//                finishTrip()
+                userLocationManager.stopRecording()
+                AppRoute.replace(.mapRoute( wayPoints: userLocationManager.makeWaypoints(from: trip), pathCoordinates: userLocationManager.livePathCoordinates, trip: trip))
             } label: {
                 Text("Finish")
                     .font(.headline)
