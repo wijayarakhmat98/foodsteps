@@ -166,13 +166,15 @@ struct PlacesView: View {
                     .foregroundColor(.secondary)
             }
             Spacer()
-            Button("Edit") {
-                draftStart = trip.scheduledStart ?? Date()
-                draftEnd = trip.scheduledEnd ?? Date().addingTimeInterval(4 * 3600)
-                isEditingSchedule = true
+            if trip.isOwnedByCurrentUser {
+                Button("Edit") {
+                    draftStart = trip.scheduledStart ?? Date()
+                    draftEnd = trip.scheduledEnd ?? Date().addingTimeInterval(4 * 3600)
+                    isEditingSchedule = true
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.brandOrange)
             }
-            .font(.subheadline.weight(.semibold))
-            .foregroundColor(.brandOrange)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
@@ -216,11 +218,13 @@ struct PlacesView: View {
                 .font(.subheadline)
                 .foregroundColor(meetingPointDisplayName == nil ? .secondary : .primary)
             Spacer()
-            Button(meetingPointDisplayName == nil ? "Set" : "Edit") {
-                isEditingMeetingPoint = true
+            if trip.isOwnedByCurrentUser {
+                Button(meetingPointDisplayName == nil ? "Set" : "Edit") {
+                    isEditingMeetingPoint = true
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.brandOrange)
             }
-            .font(.subheadline.weight(.semibold))
-            .foregroundColor(.brandOrange)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
@@ -387,15 +391,39 @@ struct PlacesView: View {
                 }
                 .buttonStyle(.plain)
 
-                Circle()
-                    .stroke(Color.brandPurple.opacity(0.5), lineWidth: 1.5)
-                    .frame(width: 22, height: 22)
+                if trip.isOwnedByCurrentUser {
+                    Button {
+                        toggleSelected()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(stop.selected ? Color.brandPurple : Color.clear)
+                            Circle()
+                                .stroke(Color.brandPurple.opacity(0.5), lineWidth: 1.5)
+                            if stop.selected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.brandPurpleLight.opacity(0.6))
             )
+        }
+
+        /// Owner-only: whether this candidate stop is actually included when
+        /// building the route (Route tab, Start Trip, navigation). Hidden
+        /// entirely for participants — see `isOwnedByCurrentUser`.
+        private func toggleSelected() {
+            stop.selected.toggle()
+            try? moc.save()
         }
 
         private var placeSubtitle: String {

@@ -47,6 +47,14 @@ struct TripInputView: View {
         stops.filter { $0.type != StopType.meetingPoint.rawValue }
     }
 
+    /// Candidate stops the owner has marked as `selected` — the only ones
+    /// that actually feed the route (Route tab, Start Trip, navigation).
+    /// `placeStops` itself stays the full candidate list, since PlacesView
+    /// still needs to show everyone's suggestions regardless of selection.
+    private var selectedPlaceStops: [Stop] {
+        placeStops.filter { $0.selected }
+    }
+
     @State private var locationManager = LocationManager()
     @State private var routePlanner = RoutePlanner()
     @State private var searchService = LocationSearchService()
@@ -115,7 +123,7 @@ struct TripInputView: View {
                     trip: trip,
                     routePlanner: routePlanner,
                     locationManager: locationManager,
-                    placeStops: placeStops,
+                    placeStops: selectedPlaceStops,
                     meetingPointDisplayName: meetingPointDisplayName,
                     isPreparingRoute: $isPreparingRoute,
                     computeRoute: computeRoute
@@ -195,15 +203,15 @@ struct TripInputView: View {
         .font(.headline)
         .foregroundColor(.white)
         .padding(.vertical, 16)
-        .background(placeStops.isEmpty || isPreparingRoute ? Color.brandOrange.opacity(0.5) : Color.brandOrange)
+        .background(selectedPlaceStops.isEmpty || isPreparingRoute ? Color.brandOrange.opacity(0.5) : Color.brandOrange)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .padding()
         .background(.bar)
-        .disabled(placeStops.isEmpty || isPreparingRoute)
+        .disabled(selectedPlaceStops.isEmpty || isPreparingRoute)
     }
 
     private func startTrip() {
-        guard !placeStops.isEmpty else { return }
+        guard !selectedPlaceStops.isEmpty else { return }
         if routePlanner.orderedStops.isEmpty {
             computeRoute { navigateToNavigation = true }
         } else {
@@ -217,7 +225,7 @@ struct TripInputView: View {
         // Stop is identifiable and toMapItem() comes from Location+Helper,
         // so the planner can just work with the CoreData Stop entities
         // directly — no more separate RouteStop translation needed.
-        routePlanner.stops = placeStops.filter { $0.location != nil }
+        routePlanner.stops = selectedPlaceStops.filter { $0.location != nil }
 
         let start = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation ?? CLLocationCoordinate2D(latitude: -6.3000, longitude: 106.4000)
 

@@ -71,6 +71,14 @@ extension Trip {
         wrappedCompletes.contains { $0.authorRecordName == dataController.currentUserRecordName }
     }
 
+    /// True if the current user created this trip, as opposed to having
+    /// joined it as a participant via a share. Owner-only actions (marking
+    /// which candidate stops are actually selected for the route, editing
+    /// the schedule, editing the meeting point) gate on this.
+    var isOwnedByCurrentUser: Bool {
+        authorRecordName == dataController.currentUserRecordName
+    }
+
     var wrappedName: String {
         name ?? erroneousName
     }
@@ -98,7 +106,7 @@ extension Trip {
     /// `sortOrder`, for restoring a previously computed/customized route.
     var wrappedPlaceStopsBySortOrder: [Stop] {
         wrappedStops
-            .filter { $0.type != StopType.meetingPoint.rawValue }
+            .filter { $0.type != StopType.meetingPoint.rawValue && $0.selected }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 

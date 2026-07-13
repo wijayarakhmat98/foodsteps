@@ -27,6 +27,7 @@ extension Stop {
         stop.trip = trip
         stop.type = type.rawValue
         stop.location = location
+        stop.selected = true
         return stop
     }
     
