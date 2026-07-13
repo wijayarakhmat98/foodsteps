@@ -11,7 +11,7 @@ struct ContentView: View {
             TabView {
                 HomeView2()
                     .tabItem {
-                        Label("Home", systemImage: "house.fill")
+                        Label("Discover", systemImage: "figure.walk")
                     }
                 
                 TripHistoryView()
