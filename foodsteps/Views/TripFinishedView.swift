@@ -53,6 +53,8 @@ struct TripFinishedView: View {
     @State private var mapPosition: MapCameraPosition = .automatic
     @State private var newPlacesCount: Int = 0
     @State private var showDeleteConfirmation = false
+    @State private var shareCardImage: UIImage?
+    @State private var showShareCard = false
 
     var body: some View {
         GeometryReader { globalGeometry in
@@ -127,6 +129,13 @@ struct TripFinishedView: View {
             fitMap()
             computeNewPlacesCount()
         }
+        .sheet(isPresented: $showShareCard) {
+            if let shareCardImage {
+                CustomShareSheetView(sharedImage: shareCardImage, distance: routePlanner.totalDistance / 1000)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+        }
     }
 
     // MARK: - Header buttons
@@ -140,7 +149,7 @@ struct TripFinishedView: View {
                 Image(systemName: "chevron.left")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
                     .background(Circle().fill(Color.white.opacity(0.22)))
             }
 
@@ -159,7 +168,7 @@ struct TripFinishedView: View {
                 Image(systemName: "ellipsis")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(Color.brandPurple)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
                     .background(Circle().fill(Color.white))
             }
         }
@@ -206,7 +215,22 @@ struct TripFinishedView: View {
     }
 
     private func shareTrip() {
-        // Hook up to your share sheet / export flow here.
+        let card = ShareTripCardView(
+            tripName: trip.name ?? "Trip",
+            dateText: formattedTripDate(),
+            participantName: participantName,
+            distanceKm: routePlanner.totalDistance / 1000,
+            placeCount: visitedStops.count,
+            stopNames: visitedStops.prefix(6).compactMap { $0.location?.name }
+        )
+
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = UIScreen.main.scale
+        renderer.isOpaque = false
+
+        guard let image = renderer.uiImage else { return }
+        shareCardImage = image
+        showShareCard = true
     }
 
     // MARK: - Summary

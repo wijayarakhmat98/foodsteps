@@ -94,16 +94,10 @@ struct PlacesView: View {
                 ForEach(displayedParticipantNames, id: \.self) { name in
                     avatarCircle(for: name)
                 }
-                if trip.share == nil {
-                    ShareLink(item: trip, preview: SharePreview("Share thiss Trip")) {
-                        addPersonGlyph
-                    }
-                } else {
-                    Button {
-                        showShareView.toggle()
-                    } label: {
-                        addPersonGlyph
-                    }
+                Button {
+                    showShareView.toggle()
+                } label: {
+                    addPersonGlyph
                 }
             }
             Text("\(displayedParticipantNames.count) \(displayedParticipantNames.count == 1 ? "Person" : "People") Joined")
