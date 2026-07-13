@@ -13,7 +13,7 @@ enum Route {
     case search(query: String)
     case placeDetail(culinaryPlace: CulinaryPlace)
     case tripDetail(trip: Trip)
-    case mapRoute(wayPoints: [Waypoint], pathCoordinates: [CLLocationCoordinate2D])
+    case mapRoute(wayPoints: [Waypoint], pathCoordinates: [CLLocationCoordinate2D], trip: Trip)
     
     @ViewBuilder
     func destinationView() -> some View {
@@ -24,8 +24,8 @@ enum Route {
             DetailPlaceView(culinaryPlace: culinaryPlace)
         case .tripDetail(let trip):
             TripInputView(trip: trip)
-        case .mapRoute(let wayPoints, let pathCoordinates):
-            MapRouteView(waypoints: wayPoints, pathCoordinates: pathCoordinates)
+        case .mapRoute(let wayPoints, let pathCoordinates, let trip):
+            MapRouteView(waypoints: wayPoints, pathCoordinates: pathCoordinates, trip: trip)
         }
     }
 }
@@ -93,7 +93,7 @@ extension Route: Hashable {
         case .tripDetail(let trip):
             hasher.combine(2) // identifier unique untuk case tripDetail
             hasher.combine(trip.objectID) // Memakai objectID bawaan CoreData yang sudah pasti Hashable
-        case .mapRoute(wayPoints: let wayPoints, pathCoordinates: let pathCoordinates):
+        case .mapRoute(wayPoints: let wayPoints, pathCoordinates: let pathCoordinates, let trip):
             hasher.combine(3)
             hasher.combine(wayPoints.first?.id)
         }
