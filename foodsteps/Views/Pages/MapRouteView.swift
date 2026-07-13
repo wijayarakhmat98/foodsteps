@@ -9,6 +9,51 @@ import SwiftUI
 import MapKit
 import PhotosUI
 
+/// Entry point for reopening a trip from History (i.e. one the current user
+/// has already saved a `Complete` record for — see
+/// `Trip.hasCurrentUserCompleted`). Shows the exact same "Trip Finished"
+/// screen `ActiveRouteView` hands off to right after finishing, rebuilt
+/// purely from persisted Core Data:
+///  - `waypoints` come from the trip's saved stops (see
+///    `UserLocationManager.makeWaypoints(from:)`), not live GPS.
+///  - `pathCoordinates` are approximated by walking the visited stops in
+///    their saved order, since the actual GPS trail recorded during the
+///    trip isn't persisted anywhere — only the stops and their order are.
+struct SavedTripMapRouteView: View {
+    let trip: Trip
+
+    /// The visited stops in the order they were completed, restored from
+    /// the persisted `sortOrder` (falls back to the unsorted place stops if
+    /// no order was ever saved).
+    private var visitedStops: [Stop] {
+        let ordered = trip.wrappedPlaceStopsBySortOrder
+        guard !ordered.isEmpty else {
+            return trip.wrappedStops.filter { $0.type != StopType.meetingPoint.rawValue }
+        }
+        return ordered
+    }
+
+    private var reconstructedPathCoordinates: [CLLocationCoordinate2D] {
+        var coordinates: [CLLocationCoordinate2D] = []
+        if let meetingPoint = trip.meetingPointCoordinate {
+            coordinates.append(meetingPoint.coordinate)
+        }
+        coordinates += visitedStops.compactMap { stop in
+            guard let location = stop.location else { return nil }
+            return CLLocationCoordinate2D(latitude: location.latitude, longitude: location.longitude)
+        }
+        return coordinates
+    }
+
+    var body: some View {
+        MapRouteView(
+            waypoints: UserLocationManager.makeWaypoints(from: trip),
+            pathCoordinates: reconstructedPathCoordinates,
+            trip: trip
+        )
+    }
+}
+
 struct MapRouteView: View {
     // 1. Terima parameter koordinat hasil tracking dari View sebelumnya
     let pathCoordinates: [CLLocationCoordinate2D]
@@ -592,7 +637,7 @@ struct BottomSheet: View {
 //        CLLocationCoordinate2D(latitude: -6.1760, longitude: 106.8340),
 //        CLLocationCoordinate2D(latitude: -6.1785, longitude: 106.8335),
 //        CLLocationCoordinate2D(latitude: -6.1800, longitude: 106.8320), // Check Point 1
-//        
+//
 //        // --- Menuju Finish Point (Muter-muter area Kwitang & Cikini) ---
 //        CLLocationCoordinate2D(latitude: -6.1815, longitude: 106.8310),
 //        CLLocationCoordinate2D(latitude: -6.1830, longitude: 106.8315),

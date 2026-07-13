@@ -171,11 +171,12 @@ struct TripInputView: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange, object: moc)) { notification in
             handleContextObjectsChanged(notification)
         }
-        .sheet(isPresented: $showShareView) {
-            ShareView(trip: trip)
-                .onDisappear {
-                    moc.refresh(trip, mergeChanges: true)
-                }
+        .onChange(of: showShareView) { _, isShowing in
+            guard isShowing else { return }
+            showShareView = false
+            TripSharePresenter.present(trip: trip) {
+                moc.refresh(trip, mergeChanges: true)
+            }
         }
     }
 

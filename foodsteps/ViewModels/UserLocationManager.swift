@@ -88,7 +88,11 @@ class UserLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate
         }
     }
     
-    func makeWaypoints(from trip: Trip) -> [Waypoint] {
+    /// Builds a `Waypoint` for every stop that has a location — purely from
+    /// persisted Core Data, so it works just as well for a live trip as it
+    /// does for reopening an already-completed one from history (no live
+    /// GPS/location permission required to compute this).
+    static func makeWaypoints(from trip: Trip) -> [Waypoint] {
         guard let stops = trip.stops as? Set<Stop> else {
             return []
         }

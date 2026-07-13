@@ -24,7 +24,7 @@ enum Route {
             DetailPlaceView(culinaryPlace: culinaryPlace)
         case .tripDetail(let trip):
             if trip.hasCurrentUserCompleted {
-                SavedTripFinishedView(trip: trip)
+                SavedTripMapRouteView(trip: trip)
             } else {
                 TripInputView(trip: trip)
             }

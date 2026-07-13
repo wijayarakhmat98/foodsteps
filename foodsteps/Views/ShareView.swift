@@ -1,23 +1,38 @@
 import CloudKit
 import CoreData
 import SwiftUI
+import UIKit
 
-/// The single invite/share surface for a trip. If the trip hasn't been
-/// shared yet, `UICloudSharingController`'s `preparationHandler` creates
-/// the `CKShare` on demand; if it has, the existing share is reused. Either
-/// way the caller just toggles one button — no branching on `trip.share`.
-struct ShareView: UIViewControllerRepresentable {
-    let trip: Trip
+/// Presents the collaborative "Invite People" surface for a trip.
+///
+/// `UICloudSharingController` has to be *presented* by a real UIKit view
+/// controller (`present(_:animated:)`); handing it to SwiftUI's `.sheet()`
+/// as if it were ordinary sheet content renders a blank white screen,
+/// especially on the `preparationHandler` (new share) path. The old fix for
+/// that — wrapping it in an empty host controller and presenting the
+/// sharing controller *from* that host, with the host itself still sitting
+/// inside a SwiftUI `.sheet()` — traded the blank screen for a different
+/// bug: two card presentations stacked on top of each other (the outer
+/// SwiftUI sheet card, then the `UICloudSharingController`'s own form-sheet
+/// card on top of it), which is what showed up as "2 cards" during share.
+///
+/// This presents `UICloudSharingController` directly from the app's actual
+/// top-most view controller instead, with no SwiftUI `.sheet()` in the
+/// mix at all, so there's only ever one card on screen.
+enum TripSharePresenter {
+    /// `UICloudSharingControllerDelegate` is held weakly by the controller,
+    /// so this keeps it alive for the lifetime of the presentation.
+    private static var activeCoordinator: Coordinator?
 
-    /// `UICloudSharingController` is designed to be *presented* by a view
-    /// controller (`present(_:animated:)`), not returned directly as a
-    /// SwiftUI `.sheet()`'s root content — doing the latter renders a blank
-    /// white screen, especially on the `preparationHandler` (new share)
-    /// path. So this hands back an empty host controller and presents the
-    /// sharing controller from it instead.
-    func makeUIViewController(context: Context) -> UIViewController {
-        let hostController = UIViewController()
-        hostController.view.backgroundColor = .clear
+    /// - Parameter onDismiss: called once the share sheet is done (saved,
+    ///   stopped, cancelled, or failed) so the caller can refresh anything
+    ///   that depends on the trip's sharing state (e.g. re-fetching
+    ///   participants).
+    static func present(trip: Trip, onDismiss: @escaping () -> Void = {}) {
+        guard let topViewController = topMostViewController() else { return }
+
+        let coordinator = Coordinator(tripName: trip.name, onDismiss: onDismiss)
+        activeCoordinator = coordinator
 
         let sharingController: UICloudSharingController
 
@@ -30,13 +45,13 @@ struct ShareView: UIViewControllerRepresentable {
                 Task {
                     do {
                         let moc = container.viewContext
-                        let trip = try await moc.perform {
+                        let managedTrip = try await moc.perform {
                             guard let objectID = moc.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: tripURI) else {
                                 throw CocoaError(.persistentStoreUnsupportedRequestType)
                             }
                             return moc.object(with: objectID)
                         }
-                        let (_, share, ckContainer) = try await container.share([trip], to: nil)
+                        let (_, share, ckContainer) = try await container.share([managedTrip], to: nil)
                         completion(share, ckContainer, nil)
                     } catch {
                         completion(nil, nil, error)
@@ -46,29 +61,33 @@ struct ShareView: UIViewControllerRepresentable {
         }
 
         sharingController.modalPresentationStyle = .formSheet
-        sharingController.delegate = context.coordinator
+        sharingController.delegate = coordinator
 
-        // The host controller isn't in the window yet on this run loop turn
-        // (it's still being inserted by the `.sheet()` transition), so
-        // presenting has to wait a tick or `present` silently no-ops.
-        DispatchQueue.main.async {
-            hostController.present(sharingController, animated: true)
+        topViewController.present(sharingController, animated: true)
+    }
+
+    private static func topMostViewController() -> UIViewController? {
+        guard
+            let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+            let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController
+        else { return nil }
+
+        var top = root
+        while let presented = top.presentedViewController {
+            top = presented
         }
-
-        return hostController
+        return top
     }
 
-    func updateUIViewController(_: UIViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(tripName: trip.name)
-    }
-
-    class Coordinator: NSObject, UICloudSharingControllerDelegate {
+    final class Coordinator: NSObject, UICloudSharingControllerDelegate {
         let tripName: String?
+        let onDismiss: () -> Void
 
-        init(tripName: String?) {
+        init(tripName: String?, onDismiss: @escaping () -> Void) {
             self.tripName = tripName
+            self.onDismiss = onDismiss
         }
 
         func itemTitle(for csc: UICloudSharingController) -> String? {
@@ -76,7 +95,20 @@ struct ShareView: UIViewControllerRepresentable {
         }
 
         func cloudSharingController(_: UICloudSharingController, failedToSaveShareWithError error: Error) {
-            fatalError("\(error)")
+            // A share failure (e.g. no network) shouldn't crash the app —
+            // just let the caller know the sheet is done so it can refresh.
+            onDismiss()
+            TripSharePresenter.activeCoordinator = nil
+        }
+
+        func cloudSharingControllerDidSaveShare(_ csc: UICloudSharingController) {
+            onDismiss()
+            TripSharePresenter.activeCoordinator = nil
+        }
+
+        func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {
+            onDismiss()
+            TripSharePresenter.activeCoordinator = nil
         }
     }
 }
