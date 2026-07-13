@@ -12,6 +12,7 @@ import PhotosUI
 struct MapRouteView: View {
     // 1. Terima parameter koordinat hasil tracking dari View sebelumnya
     let pathCoordinates: [CLLocationCoordinate2D]
+    let trip: Trip
     
     // 2. State Data Waypoints untuk Titik Photo Picker (Tanpa terikat garis orange)
     @State private var waypoints: [Waypoint] = []
@@ -25,6 +26,8 @@ struct MapRouteView: View {
     @State private var isGeneratingSnapshot = false
     @State private var showCustomShareSheet = false
     
+    @State private var offset: CGFloat = 300
+    
     @State private var cameraPosition = MapCameraPosition.region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 37.33192591260795, longitude: -122.03025654681196),
@@ -33,10 +36,16 @@ struct MapRouteView: View {
     )
     
     // 3. Inisialisasi posisi kamera agar otomatis membungkus rute tracking yang dikirim
-    init(waypoints: [Waypoint], pathCoordinates: [CLLocationCoordinate2D]) {
+    init(
+        waypoints: [Waypoint],
+        pathCoordinates: [CLLocationCoordinate2D],
+        trip: Trip
+    ) {
         self.pathCoordinates = pathCoordinates
         
         self._waypoints = State(initialValue: waypoints)
+        
+        self.trip = trip
         
         // Hitung center & span otomatis dari rute yang dikirim
         if !pathCoordinates.isEmpty {
@@ -113,7 +122,7 @@ struct MapRouteView: View {
                                     }
                                 }
                                 
-                                Text(waypoint.name)
+                                Text(waypoint.name.components(separatedBy: " ::: ").first ?? "")
                                     .font(.subheadline)
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 6)
@@ -130,6 +139,13 @@ struct MapRouteView: View {
                     MapCompass()
                 }
             }
+            BottomSheet(
+                offset: $offset,
+                showPicker: $showPicker,
+                activeWaypointIndex: $activeWaypointIndex,
+                waypoints: $waypoints,
+                trip: trip
+            )
             VStack {
                 if isGeneratingSnapshot {
                     Button {
@@ -143,12 +159,18 @@ struct MapRouteView: View {
                             Text("Generating Image")
                                 .font(.system(size: 16, weight: .semibold))
                         }
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
-                        .glassEffect(in: Capsule())
+//                        .glassEffect(in: Capsule())
+//                        .overlay {
+//                            Capsule()
+//                                .fill(Color(hex: "#FF8F14").opacity(0.25)
+//                                )
+//                        }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(hex: "#FF8F14"))
                     .disabled(true)
 
                 } else if mapSnapshotImage != nil {
@@ -163,12 +185,18 @@ struct MapRouteView: View {
                             Text("Share Image")
                                 .font(.system(size: 16, weight: .semibold))
                         }
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
-                        .glassEffect(in: Capsule())
+//                        .glassEffect(in: Capsule())
+//                        .overlay {
+//                            Capsule()
+//                                .fill(Color(hex: "#FF8F14").opacity(0.25)
+//                                )
+//                        }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(hex: "#FF8F14"))
 
                 } else {
 
@@ -182,12 +210,18 @@ struct MapRouteView: View {
                             Text("Generate Image")
                                 .font(.system(size: 16, weight: .semibold))
                         }
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
-                        .glassEffect(in: Capsule())
+//                        .glassEffect(in: Capsule())
+//                        .overlay {
+//                            Capsule()
+//                                .fill(Color(hex: "#FF8F14").opacity(0.25)
+//                                )
+//                        }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(hex: "#FF8F14"))
                 }
             }
             .padding(.horizontal, 20)
@@ -408,6 +442,142 @@ struct MapRouteView: View {
 // 5. Ekstensi pembantu deteksi update gambar rute
 extension View {
     func imagesWithRoute() -> some View { self }
+}
+
+struct BottomSheet: View {
+    @Binding var offset: CGFloat
+    @Binding var showPicker: Bool
+    @Binding var activeWaypointIndex: Int?
+    @Binding var waypoints: [Waypoint]
+    
+    let trip: Trip
+    
+    private let expandedOffset: CGFloat = 20
+    private let collapsedOffset: CGFloat = 300
+    
+    @GestureState private var dragOffset: CGFloat = 0
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            
+            Capsule()
+                .fill(Color.gray.opacity(0.5))
+                .frame(width: 40, height: 6)
+                .padding(.top, 8)
+            
+            HStack() {
+                Circle()
+                    .fill(.gray.opacity(0.2))
+                    .frame(width: 48, height: 48)
+                    .overlay {
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                
+                VStack(alignment: .leading,) {
+                    Text("Hara Hara")
+                        .font(.headline)
+                    Text("25 July 2026")
+                        .font(.footnote)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            
+            Text(trip.name ?? "Unknow")
+                .font(.title2)
+                .bold()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+            
+            HStack(spacing: 8) {
+                Image(systemName: "star.fill")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                
+                Text("\(getDiscoverCount()) new place discover")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Color(hex: "#FFF5EB")
+            )
+            .clipShape(Capsule())
+            
+            Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(height: 1)
+                .padding(.horizontal, 16)
+            
+            Text("Places Visited")
+                .foregroundStyle(Color(hex: "#4B08B5"))
+                .font(.title3)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+            
+            ScrollView () {
+                VStack(spacing: 0) {
+                    ForEach(Array(waypoints.enumerated()), id: \.element.id) {
+                        index, waypoint in
+                        
+                        MeetingPlaceCard(
+                            number: index + 1,
+                            title: waypoint.name,
+                            category: "Coffee Shop",
+                            startTime: "09:15",
+                            endTime: "09:45",
+                            isLast: index == waypoints.count - 1,
+                            image: waypoint.image,
+                            onTapImage: {
+                                showPicker = true
+                                activeWaypointIndex = index
+                            }
+                        )
+                        
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 80)
+            }
+            
+            Spacer()
+            
+            
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 600)
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(radius: 10)
+        .offset(y: offset + dragOffset)
+        .gesture(
+            DragGesture()
+                .updating($dragOffset) { value, state, _ in
+                    state = value.translation.height
+                }
+                .onEnded { value in
+                    let newOffset = offset + value.translation.height
+                    
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        if newOffset < (expandedOffset + collapsedOffset) / 2 {
+                            offset = expandedOffset
+                        } else {
+                            offset = collapsedOffset
+                        }
+                    }
+                }
+        )
+    }
+
+    func getDiscoverCount() -> Int {
+        let count = trip.stops?.count ?? 0
+        return count > 1 ? count - 1 : 0
+    }
 }
 
 //#Preview {
