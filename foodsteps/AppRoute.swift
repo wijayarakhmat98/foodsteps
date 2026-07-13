@@ -13,7 +13,7 @@ enum Route {
     case search(query: String)
     case placeDetail(culinaryPlace: CulinaryPlace)
     case tripDetail(trip: Trip)
-    case mapRoute(wayPoints: [Waypoint], pathCoordinates: [CLLocationCoordinate2D])
+    case mapRoute(wayPoints: [Waypoint], pathCoordinates: [CLLocationCoordinate2D], trip: Trip)
     
     @ViewBuilder
     func destinationView() -> some View {
@@ -23,18 +23,9 @@ enum Route {
         case .placeDetail(let culinaryPlace):
             DetailPlaceView(culinaryPlace: culinaryPlace)
         case .tripDetail(let trip):
-            // Once this user has saved a result for the trip (tapped "Save
-            // Result" on TripFinishedView after finishing it), reopening the
-            // trip should land straight on that saved result instead of
-            // back in the Places/Route planning hub — there's nothing left
-            // to plan. See Trip+Helper's `hasCurrentUserCompleted`.
-            if trip.hasCurrentUserCompleted {
-                SavedTripFinishedView(trip: trip)
-            } else {
-                TripInputView(trip: trip)
-            }
-        case .mapRoute(let wayPoints, let pathCoordinates):
-            MapRouteView(waypoints: wayPoints, pathCoordinates: pathCoordinates)
+            TripInputView(trip: trip)
+        case .mapRoute(let wayPoints, let pathCoordinates, let trip):
+            MapRouteView(waypoints: wayPoints, pathCoordinates: pathCoordinates, trip: trip)
         }
     }
 }
@@ -102,7 +93,7 @@ extension Route: Hashable {
         case .tripDetail(let trip):
             hasher.combine(2) // identifier unique untuk case tripDetail
             hasher.combine(trip.objectID) // Memakai objectID bawaan CoreData yang sudah pasti Hashable
-        case .mapRoute(wayPoints: let wayPoints, pathCoordinates: let pathCoordinates):
+        case .mapRoute(wayPoints: let wayPoints, pathCoordinates: let pathCoordinates, let trip):
             hasher.combine(3)
             hasher.combine(wayPoints.first?.id)
         }
