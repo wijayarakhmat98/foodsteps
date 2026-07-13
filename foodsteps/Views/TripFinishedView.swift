@@ -2,6 +2,45 @@ import SwiftUI
 import MapKit
 import CoreData
 
+/// Entry point for reopening a trip this user has *already* saved a result
+/// for. Pushed straight from `TripView` (see its `navigationDestination`),
+/// entirely bypassing `TripInputView`'s Places/Route hub — there's nothing
+/// left to plan, so there's no reason to route through it first.
+///
+/// Rebuilds the same "saved result" state `TripInputView` used to assemble
+/// on `onAppear` (visited stops restored from the persisted `sortOrder`,
+/// a fresh `RoutePlanner` just for display), but its back button pops this
+/// view off `TripView`'s navigation stack instead of dismissing a sheet.
+struct SavedTripFinishedView: View {
+    @ObservedObject var trip: Trip
+    @Environment(\.dismiss) private var dismiss
+    @State private var routePlanner = RoutePlanner()
+
+    /// The visited stops for the saved-result screen, restored from the
+    /// persisted `sortOrder` (falls back to the unsorted place stops if no
+    /// order was ever saved).
+    private var visitedStops: [Stop] {
+        let ordered = trip.wrappedPlaceStopsBySortOrder
+        guard !ordered.isEmpty else {
+            return trip.wrappedStops.filter { $0.type != StopType.meetingPoint.rawValue }
+        }
+        return ordered
+    }
+
+    var body: some View {
+        TripFinishedView(
+            trip: trip,
+            visitedStops: visitedStops,
+            routePlanner: routePlanner,
+            participantName: "You",
+            onSaveResult: { dismiss() }
+        )
+        .onAppear {
+            routePlanner.orderedStops = visitedStops
+        }
+    }
+}
+
 struct TripFinishedView: View {
     @ObservedObject var trip: Trip
     let visitedStops: [Stop]
@@ -10,11 +49,15 @@ struct TripFinishedView: View {
     let onSaveResult: () -> Void
 
     @Environment(\.managedObjectContext) private var moc
+    @Environment(\.dismiss) private var dismiss
     @State private var mapPosition: MapCameraPosition = .automatic
     @State private var newPlacesCount: Int = 0
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
-        NavigationStack {
+        GeometryReader { globalGeometry in
+            let topSafeArea = globalGeometry.safeAreaInsets.top
+
             ScrollView {
                 VStack(spacing: 0) {
                     // Header area
@@ -33,6 +76,10 @@ struct TripFinishedView: View {
                                 )
                             )
                             .ignoresSafeArea(edges: .top)
+
+                        headerButtons
+                            .padding(.horizontal, 16)
+                            .padding(.top, topSafeArea + 8)
                     }
 
                     // Keep all existing content BELOW the map
@@ -57,29 +104,71 @@ struct TripFinishedView: View {
                 }
             }
             .ignoresSafeArea(edges: .top)
-            .navigationTitle("Trip Finished")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: onSaveResult) {
-                        Image(systemName: "chevron.left")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: shareTrip) {
-                        Image(systemName: "square.and.arrow.up")
-                    }
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .bottom) {
+            if !trip.hasCurrentUserCompleted {
                 saveResultButton
             }
-            .onAppear {
-                fitMap()
-                computeNewPlacesCount()
+        }
+        .confirmationDialogOverlay(
+            isPresented: $showDeleteConfirmation,
+            title: "Delete Trip?",
+            message: "This will permanently delete this trip and cannot be undone.",
+            confirmTitle: "Delete"
+        ) {
+            deleteTrip()
+        }
+        .onAppear {
+            fitMap()
+            computeNewPlacesCount()
+        }
+    }
+
+    // MARK: - Header buttons
+
+    /// Back chevron (translucent circle) and "..." menu (solid circle) laid
+    /// over the purple card — same treatment as `TripHeaderView`, with the
+    /// menu holding Share and Delete instead of a trailing action closure.
+    private var headerButtons: some View {
+        HStack {
+            Button(action: onSaveResult) {
+                Image(systemName: "chevron.left")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.white.opacity(0.22)))
+            }
+
+            Spacer()
+
+            Menu {
+                Button(action: shareTrip) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(Color.brandPurple)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.white))
             }
         }
+    }
+
+    private func deleteTrip() {
+        moc.delete(trip)
+        try? moc.save()
+        dismiss()
     }
 
     // MARK: - Header

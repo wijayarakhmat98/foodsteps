@@ -5,6 +5,7 @@ import CoreTransferable
 private let erroneousID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
 private let erroneousCreatedAt = Date(timeIntervalSinceReferenceDate: 0)
 private let erroneousStops: Set<Stop> = []
+private let erroneousCompletes: Set<Complete> = []
 private let erroneousName = "Untitled"
 private let erroneousScheduledStart = Date(timeIntervalSinceReferenceDate: 0)
 private let erroneousScheduledEnd = Date(timeIntervalSinceReferenceDate: 0)
@@ -50,6 +51,33 @@ extension Trip {
             $0.hearts < $1.hearts
         }
     }
+    
+    var wrappedCompletes: [Complete] {
+        (completes as? Set<Complete> ?? erroneousCompletes).sorted {
+            $0.wrappedCreatedAt < $1.wrappedCreatedAt
+        }
+    }
+
+    /// True once *this* user (identified by their CloudKit record name, same
+    /// as every other `authorRecordName` in the schema) has saved a result
+    /// for this trip. Each participant gets their own `Complete` row, so
+    /// this is independent per-user — one person finishing/saving doesn't
+    /// affect anyone else's view of the trip.
+    ///
+    /// Used by `TripView` to decide whether tapping a trip should go
+    /// straight to `TripFinishedView` (already completed) or into
+    /// `TripInputView`'s Places/Route hub (not yet completed).
+    var hasCurrentUserCompleted: Bool {
+        wrappedCompletes.contains { $0.authorRecordName == dataController.currentUserRecordName }
+    }
+
+    /// True if the current user created this trip, as opposed to having
+    /// joined it as a participant via a share. Owner-only actions (marking
+    /// which candidate stops are actually selected for the route, editing
+    /// the schedule, editing the meeting point) gate on this.
+    var isOwnedByCurrentUser: Bool {
+        authorRecordName == dataController.currentUserRecordName
+    }
 
     var wrappedName: String {
         name ?? erroneousName
@@ -78,7 +106,7 @@ extension Trip {
     /// `sortOrder`, for restoring a previously computed/customized route.
     var wrappedPlaceStopsBySortOrder: [Stop] {
         wrappedStops
-            .filter { $0.type != StopType.meetingPoint.rawValue }
+            .filter { $0.type != StopType.meetingPoint.rawValue && $0.selected }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 

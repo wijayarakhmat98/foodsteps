@@ -23,7 +23,11 @@ enum Route {
         case .placeDetail(let culinaryPlace):
             DetailPlaceView(culinaryPlace: culinaryPlace)
         case .tripDetail(let trip):
-            TripInputView(trip: trip)
+            if trip.hasCurrentUserCompleted {
+                SavedTripFinishedView(trip: trip)
+            } else {
+                TripInputView(trip: trip)
+            }
         case .mapRoute(let wayPoints, let pathCoordinates, let trip):
             MapRouteView(waypoints: wayPoints, pathCoordinates: pathCoordinates, trip: trip)
         }

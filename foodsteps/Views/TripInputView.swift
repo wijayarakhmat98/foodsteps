@@ -17,6 +17,7 @@ struct TripInputView: View {
     @ObservedObject var trip: Trip
 
     @Environment(\.managedObjectContext) private var moc
+    @Environment(\.dismiss) private var dismiss
 
     // MARK: - Core Data Propagation
     // Replaced @FetchRequest with computed properties straight from the ObservedObject.
@@ -46,6 +47,14 @@ struct TripInputView: View {
         stops.filter { $0.type != StopType.meetingPoint.rawValue }
     }
 
+    /// Candidate stops the owner has marked as `selected` — the only ones
+    /// that actually feed the route (Route tab, Start Trip, navigation).
+    /// `placeStops` itself stays the full candidate list, since PlacesView
+    /// still needs to show everyone's suggestions regardless of selection.
+    private var selectedPlaceStops: [Stop] {
+        placeStops.filter { $0.selected }
+    }
+
     @State private var locationManager = LocationManager()
     @State private var routePlanner = RoutePlanner()
     @State private var searchService = LocationSearchService()
@@ -63,9 +72,39 @@ struct TripInputView: View {
 
     @State private var showShareView = false
 
+    /// Set right before closing the "trip finished" fullScreenCover when the
+    /// trip was just saved. Read in that cover's `onDismiss`, once the cover
+    /// has actually finished closing, to then pop `TripInputView` itself off
+    /// `TripView`'s stack. Calling `dismiss()` in the same moment as closing
+    /// the cover doesn't reliably work — `TripInputView` is still busy
+    /// presenting a modal at that instant, so the pop request gets dropped
+    /// and you land back on `TripInputView` instead of `TripView`.
+    @State private var dismissAfterFinishedCoverCloses = false
+
     var body: some View {
         VStack(spacing: 0) {
-            tabSwitcher
+            TripHeaderView(
+                title: trip.name ?? "Trip",
+                tabs: HubTab.allCases.map { ($0, $0.rawValue) },
+                selectedTab: $selectedTab,
+                onBack: { dismiss() },
+                trailing: {
+                    AnyView(
+                        Menu {
+                            Button("Rename Trip") {
+                                renameDraft = trip.name ?? ""
+                                isRenamingTrip = true
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(Color.brandPurple)
+                                .frame(width: 36, height: 36)
+                                .background(Circle().fill(Color.white))
+                        }
+                    )
+                }
+            )
 
             switch selectedTab {
             case .places:
@@ -84,7 +123,7 @@ struct TripInputView: View {
                     trip: trip,
                     routePlanner: routePlanner,
                     locationManager: locationManager,
-                    placeStops: placeStops,
+                    placeStops: selectedPlaceStops,
                     meetingPointDisplayName: meetingPointDisplayName,
                     isPreparingRoute: $isPreparingRoute,
                     computeRoute: computeRoute
@@ -93,27 +132,8 @@ struct TripInputView: View {
 
             startTripButton
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(selectedTab == .places ? (trip.name ?? "Trip") : "Route")
-                    .font(.headline)
-            }
-            if selectedTab == .places {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button("Rename Trip") {
-                            renameDraft = trip.name ?? ""
-                            isRenamingTrip = true
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
-            }
-        }
         .navigationDestination(isPresented: $navigateToNavigation) {
             ActiveRouteView(
                 trip: trip,
@@ -124,14 +144,21 @@ struct TripInputView: View {
         .fullScreenCover(isPresented: Binding(
             get: { routePlanner.isFinished },
             set: { routePlanner.isFinished = $0 }
-        )) {
-            TripFinishedView(
-                trip: trip,
-                visitedStops: finishedStopEntities,
-                routePlanner: routePlanner,
-                participantName: currentParticipantName,
-                onSaveResult: saveTripResult
-            )
+        ), onDismiss: {
+            if dismissAfterFinishedCoverCloses {
+                dismissAfterFinishedCoverCloses = false
+                dismiss()
+            }
+        }) {
+            NavigationStack {
+                TripFinishedView(
+                    trip: trip,
+                    visitedStops: finishedStopEntities,
+                    routePlanner: routePlanner,
+                    participantName: currentParticipantName,
+                    onSaveResult: saveTripResult
+                )
+            }
         }
         .alert("Rename Trip", isPresented: $isRenamingTrip) {
             TextField("Trip name", text: $renameDraft)
@@ -158,32 +185,6 @@ struct TripInputView: View {
         }
     }
 
-    // MARK: - Tab switcher
-    private var tabSwitcher: some View {
-        HStack(spacing: 4) {
-            ForEach(HubTab.allCases, id: \.self) { tab in
-                Button {
-                    selectedTab = tab
-                } label: {
-                    Text(tab.rawValue)
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(selectedTab == tab ? Color(uiColor: .systemBackground) : Color.clear)
-                        .foregroundColor(selectedTab == tab ? .primary : .secondary)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .shadow(color: .black.opacity(selectedTab == tab ? 0.08 : 0), radius: 3, y: 1)
-                }
-            }
-        }
-        .padding(4)
-        .background(Color(uiColor: .systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal)
-        .padding(.top, 10)
-        .padding(.bottom, 6)
-    }
-
     // MARK: - Shared "Start Trip" button
     private var startTripButton: some View {
         Button(action: startTrip) {
@@ -202,15 +203,15 @@ struct TripInputView: View {
         .font(.headline)
         .foregroundColor(.white)
         .padding(.vertical, 16)
-        .background(Color.black)
+        .background(selectedPlaceStops.isEmpty || isPreparingRoute ? Color.brandOrange.opacity(0.5) : Color.brandOrange)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .padding()
         .background(.bar)
-        .disabled(placeStops.isEmpty || isPreparingRoute)
+        .disabled(selectedPlaceStops.isEmpty || isPreparingRoute)
     }
 
     private func startTrip() {
-        guard !placeStops.isEmpty else { return }
+        guard !selectedPlaceStops.isEmpty else { return }
         if routePlanner.orderedStops.isEmpty {
             computeRoute { navigateToNavigation = true }
         } else {
@@ -224,7 +225,7 @@ struct TripInputView: View {
         // Stop is identifiable and toMapItem() comes from Location+Helper,
         // so the planner can just work with the CoreData Stop entities
         // directly — no more separate RouteStop translation needed.
-        routePlanner.stops = placeStops.filter { $0.location != nil }
+        routePlanner.stops = selectedPlaceStops.filter { $0.location != nil }
 
         let start = trip.meetingPointCoordinate?.coordinate ?? locationManager.currentLocation ?? CLLocationCoordinate2D(latitude: -6.3000, longitude: 106.4000)
 
@@ -320,9 +321,25 @@ struct TripInputView: View {
     }
 
     private func saveTripResult() {
+        // Record that *this* user finished the trip. Each participant's
+        // Complete is tagged with their own authorRecordName (see
+        // Complete+Helper), so this is independent per-user — guard against
+        // inserting a duplicate if they somehow land here twice.
+        if !trip.hasCurrentUserCompleted {
+            Complete.insert(into: moc, trip: trip)
+            try? moc.save()
+        }
+
         // Stop.visitedAt/departedAt and Trip.finishedAt no longer exist in
         // the schema. Visit timing stays ephemeral in RoutePlanner for now
         // (TripFinishedView already reads it from there).
+        // Trip is finished and saved — there's nothing left to do on the
+        // Places/Route hub, so leave it entirely and land back on TripView.
+        // (Reopening this trip later now goes straight to TripFinishedView
+        // via TripView's own navigationDestination check.) The actual pop
+        // happens in the fullScreenCover's onDismiss, once it's confirmed
+        // closed — see dismissAfterFinishedCoverCloses above.
+        dismissAfterFinishedCoverCloses = true
         routePlanner.isFinished = false
         navigateToNavigation = false
     }

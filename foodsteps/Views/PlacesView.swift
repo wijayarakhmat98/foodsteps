@@ -64,11 +64,8 @@ struct PlacesView: View {
     var body: some View {
         VStack(spacing: 0) {
             peopleJoinedSection
-            Divider()
             scheduleRow
-            Divider()
             meetingPointRow
-            Divider()
             sortHeaderRow
             placesList
         }
@@ -99,40 +96,39 @@ struct PlacesView: View {
                 }
                 if trip.share == nil {
                     ShareLink(item: trip, preview: SharePreview("Share thiss Trip")) {
-                        Image(systemName: "plus")
-                            .font(.caption.bold())
-                            .foregroundColor(.secondary)
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(Color(uiColor: .systemGray5)))
-                            .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
+                        addPersonGlyph
                     }
                 } else {
                     Button {
                         showShareView.toggle()
                     } label: {
-                        Image(systemName: "plus")
-                            .font(.caption.bold())
-                            .foregroundColor(.secondary)
-                            .frame(width: 36, height: 36)
-                            .background(Circle().fill(Color(uiColor: .systemGray5)))
-                            .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
+                        addPersonGlyph
                     }
                 }
             }
             Text("\(displayedParticipantNames.count) \(displayedParticipantNames.count == 1 ? "Person" : "People") Joined")
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundColor(.secondary)
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, 18)
         .frame(maxWidth: .infinity)
     }
 
+    private var addPersonGlyph: some View {
+        Image(systemName: "plus")
+            .font(.subheadline.bold())
+            .foregroundColor(.brandOrange)
+            .frame(width: 36, height: 36)
+            .background(Circle().fill(Color.white))
+            .overlay(Circle().stroke(Color.brandOrange, lineWidth: 1.5))
+    }
+
     private func avatarCircle(for name: String) -> some View {
-        Text(String(name.prefix(1)).uppercased())
+        Image(systemName: "person.fill")
             .font(.caption.bold())
             .foregroundColor(.white)
             .frame(width: 36, height: 36)
-            .background(Circle().fill(Color.gray))
+            .background(Circle().fill(Color.brandPurple))
             .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
     }
 
@@ -170,15 +166,24 @@ struct PlacesView: View {
                     .foregroundColor(.secondary)
             }
             Spacer()
-            Button("Edit") {
-                draftStart = trip.scheduledStart ?? Date()
-                draftEnd = trip.scheduledEnd ?? Date().addingTimeInterval(4 * 3600)
-                isEditingSchedule = true
+            if trip.isOwnedByCurrentUser {
+                Button("Edit") {
+                    draftStart = trip.scheduledStart ?? Date()
+                    draftEnd = trip.scheduledEnd ?? Date().addingTimeInterval(4 * 3600)
+                    isEditingSchedule = true
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.brandOrange)
             }
-            .font(.subheadline.weight(.semibold))
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(uiColor: .systemGray4), lineWidth: 1)
+        )
         .padding(.horizontal)
-        .padding(.vertical, 12)
+        .padding(.bottom, 10)
     }
 
     private func scheduleLabel(start: Date, end: Date) -> String {
@@ -206,22 +211,29 @@ struct PlacesView: View {
     // MARK: - Meeting point
 
     private var meetingPointRow: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Meeting point")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text(meetingPointDisplayName ?? "Not set")
-                    .font(.subheadline)
-            }
+        HStack(spacing: 8) {
+            Image(systemName: "mappin.circle.fill")
+                .foregroundColor(.brandOrange)
+            Text(meetingPointDisplayName ?? "Titik Kumpul")
+                .font(.subheadline)
+                .foregroundColor(meetingPointDisplayName == nil ? .secondary : .primary)
             Spacer()
-            Button("Edit") {
-                isEditingMeetingPoint = true
+            if trip.isOwnedByCurrentUser {
+                Button(meetingPointDisplayName == nil ? "Set" : "Edit") {
+                    isEditingMeetingPoint = true
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.brandOrange)
             }
-            .font(.subheadline.weight(.semibold))
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(uiColor: .systemGray4), lineWidth: 1)
+        )
         .padding(.horizontal)
-        .padding(.vertical, 12)
+        .padding(.bottom, 14)
     }
 
     private var meetingPointSheet: some View {
@@ -280,17 +292,19 @@ struct PlacesView: View {
             Button {
                 isShowingAddSheet = true
             } label: {
-                Label("Add", systemImage: "plus")
+                Text("+ Add Place")
                     .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.brandOrange)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(Color.black)
-                    .foregroundColor(.white)
-                    .clipShape(Capsule())
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.brandOrange, lineWidth: 1.5)
+                    )
             }
         }
         .padding(.horizontal)
-        .padding(.vertical, 10)
+        .padding(.bottom, 10)
     }
 
     /// Trip+Helper's `wrappedStops` sorts ascending by hearts (lowest
@@ -303,16 +317,15 @@ struct PlacesView: View {
     @ViewBuilder
     private var placesList: some View {
         if placeStops.isEmpty {
-            ContentUnavailableView(
-                "No Stops Yet",
-                systemImage: "mappin.and.ellipse",
-                description: Text("Tap Add to search for places your group wants to visit.")
-            )
-            .frame(maxHeight: .infinity)
+            NoPlacesEmptyState()
+                .frame(maxHeight: .infinity)
         } else {
             List {
                 ForEach(topVotedStops, id: \.objectID) { stop in
                     PlaceRow(stop: stop, trip: trip)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                 }
                 .onDelete { offsets in
                     for index in offsets {
@@ -324,6 +337,7 @@ struct PlacesView: View {
                 }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
     }
 
@@ -343,20 +357,25 @@ struct PlacesView: View {
 
         var body: some View {
             HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(stop.location?.name?.components(separatedBy: " ::: ").first ?? "Unknown")
-                        .font(.headline)
-                    Text(stop.location?.address ?? "")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.brandPurple)
+                    Text(placeSubtitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
-                    Text(stop.wrappedAuthorName)
-                        .font(.caption2.weight(.medium))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color(uiColor: .systemGray6))
-                        .clipShape(Capsule())
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.white)
+                            .frame(width: 16, height: 16)
+                            .background(Circle().fill(Color.brandPurple))
+                        Text(stop.wrappedAuthorName)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.top, 2)
                 }
                 Spacer()
                 Button {
@@ -364,15 +383,55 @@ struct PlacesView: View {
                 } label: {
                     VStack(spacing: 2) {
                         Image(systemName: hasVoted ? "heart.fill" : "heart")
-                            .foregroundColor(hasVoted ? .red : .secondary)
+                            .foregroundColor(.brandOrange)
                         Text("\(stop.hearts)")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                 }
                 .buttonStyle(.plain)
+
+                if trip.isOwnedByCurrentUser {
+                    Button {
+                        toggleSelected()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(stop.selected ? Color.brandPurple : Color.clear)
+                            Circle()
+                                .stroke(Color.brandPurple.opacity(0.5), lineWidth: 1.5)
+                            if stop.selected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .padding(.vertical, 6)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.brandPurpleLight.opacity(0.6))
+            )
+        }
+
+        /// Owner-only: whether this candidate stop is actually included when
+        /// building the route (Route tab, Start Trip, navigation). Hidden
+        /// entirely for participants — see `isOwnedByCurrentUser`.
+        private func toggleSelected() {
+            stop.selected.toggle()
+            try? moc.save()
+        }
+
+        private var placeSubtitle: String {
+            let category = stop.location?.category
+            if let category, !category.isEmpty {
+                return category
+            }
+            return stop.location?.address ?? ""
         }
 
         /// Vote model has no hasVoted/toggleVote convenience — those were on
