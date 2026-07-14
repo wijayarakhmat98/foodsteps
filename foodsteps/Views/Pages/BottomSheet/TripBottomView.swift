@@ -26,12 +26,15 @@ struct TripBottomView: View {
             // MARK: - Header
             ZStack {
                 HStack {
-                    Image(systemName: "xmark")
-                        .font(.title3)
-                        .foregroundColor(.black)
-                        .onTapGesture {
-                            showDialog = false
-                        }
+                    Button {
+                        showDialog = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.title3)
+                            .foregroundColor(.black)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
                     Spacer()
                 }
                 Text("Add To Trip")
@@ -64,20 +67,20 @@ struct TripBottomView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 16) {
-                        ForEach(viewModel.getTripWithoutCulinaryPlaceItem(culinaryPlace: culinaryPlace)) {
+                        ForEach(viewModel.trips) {
                             trip in
                             BottomTripCard(
                                 urls: viewModel.getMax4PlaceImageUrl(for: trip),
                                 trip: trip,
                                 onAddToTrip: { selectedTrip in
                                     // Tulis kode Anda di sini saat trip ditambahkan
-//                                    print("Trip dipilih: \(selectedTrip.name)")
+                                    print("Trip dipilih: \(selectedTrip.name)")
                                     viewModel.addCulinaryPlaceToTrip(
                                         trip: selectedTrip,
                                         culinaryPlace: culinaryPlace
                                     )
                                     showDialog = false
-//                                    print("add \(culinaryPlace.name) to Trip with name \(trip.name) and id \(trip.id)")
+                                    print("add \(culinaryPlace.name) to Trip with name \(trip.name) and id \(trip.id)")
                                 }
                             )
                         }

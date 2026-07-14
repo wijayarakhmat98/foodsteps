@@ -31,10 +31,15 @@ struct BottomCreateTripView: View {
             // MARK: - Header
             ZStack {
                 HStack {
-                    Image(systemName: "xmark")
-                        .font(.title3)
-                        .foregroundColor(primaryColor)
-                        .onTapGesture { showDialog = false }
+                    Button {
+                        showDialog = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.title3)
+                            .foregroundColor(primaryColor)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
                     Spacer()
                 }
                 Text("Create Trip")
@@ -173,6 +178,6 @@ struct BottomCreateTripView: View {
 
 #Preview {
 //    @State var showDialog: Bool = true;
-//    
+//
 //    BottomCreateTripView(showDialog: $showDialog)
 }

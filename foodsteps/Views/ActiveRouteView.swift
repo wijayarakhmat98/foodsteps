@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import CoreData
 
 struct ActiveRouteView: View {
 
@@ -11,6 +12,7 @@ struct ActiveRouteView: View {
     @State private var followUser = true
     @State private var showFinishConfirmation = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.managedObjectContext) private var moc
 
     // MARK: - Draggable sheet
 
@@ -85,16 +87,21 @@ struct ActiveRouteView: View {
             message: "This process cannot be undone.",
             confirmTitle: "Finish Trip"
         ) {
-            // Marks the trip finished (routePlanner.isFinished = true),
-            // which TripInputView is watching via its fullScreenCover.
-            // That cover presents TripFinishedView so the user can review
-            // the visited stops and tap "Save Result" — which is what
-            // actually persists the per-user Complete record (see
-            // TripInputView.saveTripResult()). Reopening the trip later
-            // then goes straight to the saved result instead of back into
+            // Marks the trip as complete for the current user right away —
+            // this is what makes it show up under the "History" segment in
+            // TripHistoryView (see Trip.hasCurrentUserCompleted) — then
+            // hands off to the map/share recap screen. Reopening the trip
+            // later goes straight to the saved result instead of back into
             // the Places/Route hub (see AppRoute's tripDetail destination).
             userLocationManager.stopRecording()
-            finishTrip()
+            markTripComplete()
+            AppRoute.replace(
+                .mapRoute(
+                    wayPoints: UserLocationManager.makeWaypoints(from: trip),
+                    pathCoordinates: userLocationManager.livePathCoordinates,
+                    trip: trip
+                )
+            )
         }
         .onAppear {
 
@@ -402,9 +409,6 @@ struct ActiveRouteView: View {
 
             Button {
                 showFinishConfirmation = true
-//                finishTrip()
-                userLocationManager.stopRecording()
-                AppRoute.replace(.mapRoute( wayPoints: userLocationManager.makeWaypoints(from: trip), pathCoordinates: userLocationManager.livePathCoordinates, trip: trip))
             } label: {
                 Text("Finish")
                     .font(.headline)
@@ -436,15 +440,14 @@ struct ActiveRouteView: View {
         .background(.bar)
     }
 
-    private func finishTrip() {
-        while routePlanner.advanceToNextStop() {
-            if let next = routePlanner.currentNavigationStop {
-                locationManager.monitorArrival(
-                    at: next.mapItem.placemark.coordinate,
-                    identifier: next.displayName
-                )
-            }
-        }
+    /// Persists a `Complete` record for the current user, if one doesn't
+    /// already exist. This is what `Trip.hasCurrentUserCompleted` reads —
+    /// once it's true, `TripHistoryView`'s segmented control moves this
+    /// trip out of "Planned" and into "History".
+    private func markTripComplete() {
+        guard !trip.hasCurrentUserCompleted else { return }
+        Complete.insert(into: moc, trip: trip)
+        try? moc.save()
     }
 
     // MARK: - Helpers

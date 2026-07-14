@@ -68,6 +68,8 @@ struct TripInputView: View {
 
     @State private var isPreparingRoute = false
 
+    @State private var showStartConfirmation = false
+
     @State private var navigateToNavigation = false
 
     @State private var showShareView = false
@@ -87,23 +89,7 @@ struct TripInputView: View {
                 title: trip.name ?? "Trip",
                 tabs: HubTab.allCases.map { ($0, $0.rawValue) },
                 selectedTab: $selectedTab,
-                onBack: { dismiss() },
-                trailing: {
-                    AnyView(
-                        Menu {
-                            Button("Rename Trip") {
-                                renameDraft = trip.name ?? ""
-                                isRenamingTrip = true
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(Color.brandPurple)
-                                .frame(width: 36, height: 36)
-                                .background(Circle().fill(Color.white))
-                        }
-                    )
-                }
+                onBack: { dismiss() }
             )
 
             switch selectedTab {
@@ -170,6 +156,14 @@ struct TripInputView: View {
                 try? moc.save()
             }
         }
+        .confirmationDialogOverlay(
+            isPresented: $showStartConfirmation,
+            title: "Start Trip?",
+            message: "You're about to head out to your selected places. Make sure everyone's ready before you begin.",
+            confirmTitle: "Start Trip"
+        ) {
+            beginTrip()
+        }
         .onAppear {
             locationManager.requestPermissionAndStart()
             syncRoutePlannerOrderIfNeeded()
@@ -177,11 +171,12 @@ struct TripInputView: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange, object: moc)) { notification in
             handleContextObjectsChanged(notification)
         }
-        .sheet(isPresented: $showShareView) {
-            ShareView(share: trip.share!)
-                .onDisappear {
-                    moc.refresh(trip, mergeChanges: true)
-                }
+        .onChange(of: showShareView) { _, isShowing in
+            guard isShowing else { return }
+            showShareView = false
+            TripSharePresenter.present(trip: trip) {
+                moc.refresh(trip, mergeChanges: true)
+            }
         }
     }
 
@@ -211,6 +206,11 @@ struct TripInputView: View {
     }
 
     private func startTrip() {
+        guard !selectedPlaceStops.isEmpty else { return }
+        showStartConfirmation = true
+    }
+
+    private func beginTrip() {
         guard !selectedPlaceStops.isEmpty else { return }
         if routePlanner.orderedStops.isEmpty {
             computeRoute { navigateToNavigation = true }

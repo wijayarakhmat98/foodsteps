@@ -25,18 +25,24 @@ class LocationSearchService: NSObject, MKLocalSearchCompleterDelegate {
         }
     }
 
+    /// Region used to bias `.foodOnly` searches (trip stops) toward the
+    /// Jakarta/Banten culinary scene the app is built around.
+    private let bantenJakartaRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: -6.3000, longitude: 106.4000),
+        span: MKCoordinateSpan(latitudeDelta: 1.5, longitudeDelta: 1.5)
+    )
+
+    /// A near-country-sized region used for `.anyPlace` (the meeting point)
+    /// so it isn't boxed into the Jakarta/Banten area the way stop search
+    /// is — a meeting point can reasonably be anywhere.
+    private let unrestrictedRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: -2.5, longitude: 118.0),
+        span: MKCoordinateSpan(latitudeDelta: 40, longitudeDelta: 40)
+    )
+
     override init() {
         super.init()
         completer.delegate = self
-
-        // Define the region right here so it never gets lost!
-        let bantenJakartaCenter = CLLocationCoordinate2D(latitude: -6.3000, longitude: 106.4000)
-        let bantenJakartaRegion = MKCoordinateRegion(
-            center: bantenJakartaCenter,
-            span: MKCoordinateSpan(latitudeDelta: 1.5, longitudeDelta: 1.5)
-        )
-
-        completer.region = bantenJakartaRegion
         configure(for: .foodOnly)
     }
 
@@ -45,9 +51,14 @@ class LocationSearchService: NSObject, MKLocalSearchCompleterDelegate {
     func configure(for mode: LocationSearchMode) {
         switch mode {
         case .foodOnly:
+            // Restaurants/cafes/bakeries only, biased to the local culinary region.
+            completer.region = bantenJakartaRegion
             completer.resultTypes = .pointOfInterest
             completer.pointOfInterestFilter = MKPointOfInterestFilter(including: [.restaurant, .cafe, .bakery])
         case .anyPlace:
+            // No category restriction, and no tight geographic box — the
+            // meeting point can be any kind of place, anywhere.
+            completer.region = unrestrictedRegion
             completer.resultTypes = [.pointOfInterest, .address]
             completer.pointOfInterestFilter = .includingAll
         }
