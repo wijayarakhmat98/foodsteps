@@ -107,7 +107,8 @@ class UserLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate
                 coordinate: CLLocationCoordinate2D(
                     latitude: location.latitude,
                     longitude: location.longitude
-                )
+                ),
+                category: location.categoryLabel
             )
         }
     }

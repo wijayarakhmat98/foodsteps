@@ -209,11 +209,11 @@ struct ActiveRouteView: View {
                 if userLocationManager.isRecording {
                     HStack {
                         Circle()
-                            .fill(userLocationManager.isPaused ? Color.yellow : Color.red)
+                            .fill(Color.red)
                             .frame(width: 8, height: 8)
-                        Text(userLocationManager.isPaused ? "PAUSED" : "REC")
+                        Text("REC")
                             .font(.caption).bold()
-                            .foregroundColor(userLocationManager.isPaused ? .yellow : .red)
+                            .foregroundColor(.red)
                     }
                 }
             }
@@ -247,13 +247,13 @@ struct ActiveRouteView: View {
                 Circle()
                     .fill(Color.white.opacity(0.18))
                     .frame(width: 40, height: 40)
-                Image(systemName: routePlanner.isPaused ? "pause.fill" : "figure.walk")
+                Image(systemName: "figure.walk")
                     .font(.subheadline.bold())
                     .foregroundColor(.white)
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(routePlanner.isPaused ? "Trip Paused" : "Trip Ongoing")
+                Text("Trip Ongoing")
                     .font(.headline)
                     .foregroundColor(.white)
                 Text("\(min(routePlanner.currentLegIndex, routePlanner.orderedStops.count)) of \(routePlanner.orderedStops.count) stops visited")
@@ -379,47 +379,22 @@ struct ActiveRouteView: View {
     private var actionButtons: some View {
         HStack(spacing: 12) {
 
-            if routePlanner.isPaused {
-                Button {
-                    userLocationManager.resumeRecording()
-                    routePlanner.resumeNavigation()
-                } label: {
-                    Text("Continue")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.brandPurple)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                }
-            } else {
-                Button {
-                    userLocationManager.pauseRecording()
-                    routePlanner.pauseNavigation()
-                } label: {
-                    Text("Pause")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.orange)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                }
-            }
-
             Button {
                 showFinishConfirmation = true
             } label: {
-                Text("Finish")
-                    .font(.headline)
-                    .foregroundColor(.brandPurple)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.brandPurple, lineWidth: 1.5)
-                    )
+                HStack(spacing: 10) {
+                    Image(systemName: "flag.checkered")
+                        .font(.system(size: 18, weight: .semibold))
+
+                    Text("Finish")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
             }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.brandOrange)
             
 //            Button {
 //                userLocationManager.startRecording()
@@ -454,21 +429,7 @@ struct ActiveRouteView: View {
     
     /// Parses the raw MKPointOfInterestCategory into a readable string (e.g., "MKPOICategoryRestaurant" -> "Restaurant")
     private func categoryLabel(for category: MKPointOfInterestCategory?) -> String? {
-        guard let category = category else { return nil }
-        
-        // Remove the "MKPOICategory" prefix to get a clean UI string
-        let rawString = category.rawValue
-        let cleanString = rawString.replacingOccurrences(of: "MKPOICategory", with: "")
-        
-        // Add spaces before capital letters for camel case categories like "NationalPark" -> "National Park"
-        let readableString = cleanString.replacingOccurrences(
-            of: "([A-Z])",
-            with: " $1",
-            options: .regularExpression,
-            range: cleanString.startIndex..<cleanString.endIndex
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        return readableString.isEmpty ? nil : readableString
+        Location.categoryLabel(fromRawCategory: category?.rawValue)
     }
 
     private func remainingStopsCount() -> Int {

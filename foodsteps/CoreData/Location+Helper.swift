@@ -52,7 +52,44 @@ extension Location {
     }
 
     var wrappedCategory: String {
-        category ?? erroneousCategory
+        categoryLabel ?? erroneousCategory
+    }
+
+    /// A clean, human-readable label for this location's category — e.g.
+    /// "Restaurant" rather than the raw `"MKPOICategoryRestaurant"` that's
+    /// actually stored in `category` — or `nil` if there's no category.
+    var categoryLabel: String? {
+        Location.categoryLabel(fromRawCategory: category)
+    }
+
+    /// Turns a raw `MKPointOfInterestCategory.rawValue` (e.g.
+    /// `"MKPOICategoryRestaurant"`, `"MKPOICategoryATM"`) into a
+    /// human-readable label (`"Restaurant"`, `"ATM"`).
+    ///
+    /// Splitting PascalCase by putting a space before *every* capital
+    /// letter breaks on back-to-back-capital categories like `"ATM"` or
+    /// `"EVCharger"` (turning them into `"A T M"` / `"E V Charger"`). This
+    /// instead only splits at an acronym/word boundary, so a run of
+    /// capitals stays together until the last one that starts a new word.
+    static func categoryLabel(fromRawCategory rawCategory: String?) -> String? {
+        guard let rawCategory, !rawCategory.isEmpty else { return nil }
+
+        let cleanString = rawCategory.replacingOccurrences(of: "MKPOICategory", with: "")
+        guard !cleanString.isEmpty else { return nil }
+
+        var readable = cleanString.replacingOccurrences(
+            of: "([A-Z]+)([A-Z][a-z])",
+            with: "$1 $2",
+            options: .regularExpression
+        )
+        readable = readable.replacingOccurrences(
+            of: "([a-z0-9])([A-Z])",
+            with: "$1 $2",
+            options: .regularExpression
+        )
+        readable = readable.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return readable.isEmpty ? nil : readable
     }
 
     func toMapItem() -> MKMapItem {

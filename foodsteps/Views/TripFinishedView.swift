@@ -288,7 +288,7 @@ struct TripFinishedView: View {
 
     private func subtitle(for stop: Stop, at index: Int) -> String {
         var parts: [String] = []
-        if let category = stop.location?.category {
+        if let category = stop.location?.categoryLabel {
             parts.append(category)
         }
         if let window = routePlanner.visitedWindow(at: index) {

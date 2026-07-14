@@ -421,7 +421,7 @@ struct PlacesView: View {
         }
 
         private var placeSubtitle: String {
-            let category = stop.location?.category
+            let category = stop.location?.categoryLabel
             if let category, !category.isEmpty {
                 return category
             }

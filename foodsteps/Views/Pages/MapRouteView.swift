@@ -8,6 +8,7 @@
 import SwiftUI
 import MapKit
 import PhotosUI
+import CoreData
 
 /// Entry point for reopening a trip from History (i.e. one the current user
 /// has already saved a `Complete` record for — see
@@ -16,11 +17,17 @@ import PhotosUI
 /// purely from persisted Core Data:
 ///  - `waypoints` come from the trip's saved stops (see
 ///    `UserLocationManager.makeWaypoints(from:)`), not live GPS.
-///  - `pathCoordinates` are approximated by walking the visited stops in
-///    their saved order, since the actual GPS trail recorded during the
-///    trip isn't persisted anywhere — only the stops and their order are.
+///  - `pathCoordinates` are the actual walking routes between each visited
+///    stop, in order, fetched from MapKit — not a straight line from spot
+///    to spot — since the real GPS trail recorded during the trip isn't
+///    persisted anywhere; only the stops and their order are.
 struct SavedTripMapRouteView: View {
     let trip: Trip
+
+    /// Starts as the straight-line fallback so there's something to show
+    /// immediately, then gets replaced by the real road-following route
+    /// once `fetchWalkedPath()` finishes.
+    @State private var pathCoordinates: [CLLocationCoordinate2D] = []
 
     /// The visited stops in the order they were completed, restored from
     /// the persisted `sortOrder` (falls back to the unsorted place stops if
@@ -33,7 +40,9 @@ struct SavedTripMapRouteView: View {
         return ordered
     }
 
-    private var reconstructedPathCoordinates: [CLLocationCoordinate2D] {
+    /// Meeting point, then every visited stop, in order — the sequence of
+    /// legs to route between.
+    private var orderedWaypointCoordinates: [CLLocationCoordinate2D] {
         var coordinates: [CLLocationCoordinate2D] = []
         if let meetingPoint = trip.meetingPointCoordinate {
             coordinates.append(meetingPoint.coordinate)
@@ -48,9 +57,57 @@ struct SavedTripMapRouteView: View {
     var body: some View {
         MapRouteView(
             waypoints: UserLocationManager.makeWaypoints(from: trip),
-            pathCoordinates: reconstructedPathCoordinates,
+            pathCoordinates: pathCoordinates,
             trip: trip
         )
+        .task(id: trip.objectID) {
+            // Straight-line fallback first (instant), then swap in the
+            // real route once MapKit responds.
+            pathCoordinates = orderedWaypointCoordinates
+            pathCoordinates = await Self.fetchWalkedPath(through: orderedWaypointCoordinates)
+        }
+    }
+
+    /// Chains together the actual walking route between each consecutive
+    /// pair of stops (meeting point → stop 1 → stop 2 → …), the same way
+    /// `RoutePlanner.fetchLegs` does for a live trip, so a reopened trip's
+    /// path follows real streets instead of cutting straight lines between
+    /// spots. Any leg MapKit can't route (offline, no result, etc.) falls
+    /// back to a straight segment for just that leg rather than dropping
+    /// the whole route.
+    private static func fetchWalkedPath(through coordinates: [CLLocationCoordinate2D]) async -> [CLLocationCoordinate2D] {
+        guard coordinates.count > 1 else { return coordinates }
+
+        var fullPath: [CLLocationCoordinate2D] = [coordinates[0]]
+
+        for index in 0..<(coordinates.count - 1) {
+            let start = coordinates[index]
+            let end = coordinates[index + 1]
+
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
+            request.transportType = .walking
+
+            let directions = MKDirections(request: request)
+            if let response = try? await directions.calculate(), let route = response.routes.first {
+                fullPath += route.polyline.coordinates
+            } else {
+                fullPath.append(end)
+            }
+        }
+
+        return fullPath
+    }
+}
+
+private extension MKPolyline {
+    /// Reads the polyline's underlying coordinates back out — `MKPolyline`
+    /// only exposes them via `getCoordinates(_:range:)`.
+    var coordinates: [CLLocationCoordinate2D] {
+        var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: pointCount)
+        getCoordinates(&coords, range: NSRange(location: 0, length: pointCount))
+        return coords
     }
 }
 
@@ -91,37 +148,46 @@ struct MapRouteView: View {
         self._waypoints = State(initialValue: waypoints)
         
         self.trip = trip
-        
-        // Hitung center & span otomatis dari rute yang dikirim
-        if !pathCoordinates.isEmpty {
-            var minLat = 90.0, maxLat = -90.0, minLon = 180.0, maxLon = -180.0
-            for c in pathCoordinates {
-                minLat = min(minLat, c.latitude)
-                maxLat = max(maxLat, c.latitude)
-                minLon = min(minLon, c.longitude)
-                maxLon = max(maxLon, c.longitude)
-            }
-            
-            let center = CLLocationCoordinate2D(
-                latitude: (minLat + maxLat) / 2,
-                longitude: (minLon + maxLon) / 2
-            )
-            // Pengali diturunkan ke 1.25 agar nge-fit pas di tengah dan tidak terlalu jauh zoom-out-nya
-            let span = MKCoordinateSpan(
-                latitudeDelta: (maxLat - minLat) * 1.8,
-                longitudeDelta: (maxLon - minLon) * 1.8
-            )
-            
-            let region = MKCoordinateRegion(center: center, span: span)
+
+        // Prefer fitting the tracked/walked path; if that's not available
+        // yet (e.g. a reopened trip whose real route is still being fetched
+        // from MapKit), fall back to fitting the waypoints themselves —
+        // those ARE available immediately, so this only needs the "no data
+        // at all" default for a genuinely empty trip.
+        let fitCoordinates = !pathCoordinates.isEmpty ? pathCoordinates : waypoints.map(\.coordinate)
+        if let region = Self.regionFitting(fitCoordinates) {
             self._cameraPosition = State(initialValue: .region(region))
-        } else {
-            // Fallback jika array kosong
-            let defaultRegion = MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: -6.1825, longitude: 106.8330),
-                span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
-            )
-            self._cameraPosition = State(initialValue: .region(defaultRegion))
         }
+    }
+
+    /// The smallest region containing every coordinate given, padded out a
+    /// bit so points aren't jammed against the map's edges — or `nil` if
+    /// there's nothing to fit (caller should keep whatever camera position
+    /// it already has rather than jump to an arbitrary default).
+    private static func regionFitting(_ coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion? {
+        guard !coordinates.isEmpty else { return nil }
+
+        var minLat = 90.0, maxLat = -90.0, minLon = 180.0, maxLon = -180.0
+        for c in coordinates {
+            minLat = min(minLat, c.latitude)
+            maxLat = max(maxLat, c.latitude)
+            minLon = min(minLon, c.longitude)
+            maxLon = max(maxLon, c.longitude)
+        }
+
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+        // Pengali diturunkan ke 1.8 agar nge-fit pas di tengah dan tidak terlalu jauh zoom-out-nya.
+        // A single point (or all-identical points) has zero span, so floor
+        // it to a sane neighborhood-level zoom instead of maxing in.
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((maxLat - minLat) * 1.8, 0.02),
+            longitudeDelta: max((maxLon - minLon) * 1.8, 0.02)
+        )
+
+        return MKCoordinateRegion(center: center, span: span)
     }
     
     var body: some View {
@@ -182,6 +248,13 @@ struct MapRouteView: View {
                 .mapControls {
                     MapUserLocationButton()
                     MapCompass()
+                }
+                .onChange(of: pathCoordinates.count) {
+                    if let region = Self.regionFitting(pathCoordinates) {
+                        withAnimation {
+                            cameraPosition = .region(region)
+                        }
+                    }
                 }
             }
             BottomSheet(
@@ -542,7 +615,7 @@ struct BottomSheet: View {
                     .font(.headline)
                     .foregroundStyle(.orange)
                 
-                Text("\(getDiscoverCount()) new place discover")
+                Text("\(getDiscoverCount()) New Place Discover")
                     .font(.headline)
                     .foregroundStyle(.primary)
             }
@@ -573,9 +646,7 @@ struct BottomSheet: View {
                         MeetingPlaceCard(
                             number: index + 1,
                             title: waypoint.name,
-                            category: "Coffee Shop",
-                            startTime: "09:15",
-                            endTime: "09:45",
+                            category: waypoint.category ?? "Place",
                             isLast: index == waypoints.count - 1,
                             image: waypoint.image,
                             onTapImage: {

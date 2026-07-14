@@ -12,8 +12,6 @@ struct MeetingPlaceCard: View {
     let number: Int
     let title: String
     let category: String
-    let startTime: String
-    let endTime: String
     let isLast: Bool?
     let image: UIImage?
     let onTapImage: () -> Void
@@ -37,15 +35,9 @@ struct MeetingPlaceCard: View {
                         .foregroundStyle(.black)
                         .lineLimit(1)
 
-                    HStack(spacing: 4) {
-                        Text(category)
-                        Text("|")
-                        Text(startTime)
-                        Text("-")
-                        Text(endTime)
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.gray)
+                    Text(category)
+                        .font(.subheadline)
+                        .foregroundStyle(.gray)
                 }
                 .padding(.leading, 74)
                 .padding(.trailing, 16)
@@ -145,8 +137,6 @@ struct MeetingPlaceCard: View {
             number: 1,
             title: "Titik Temu Coffee - Blok M",
             category: "Coffee Shop",
-            startTime: "09:15",
-            endTime: "09:45",
             isLast: true,
 //            image: UIImage(systemName: "square.and.arrow.up")
             image: nil,
