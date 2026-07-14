@@ -67,7 +67,7 @@ struct TripBottomView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 16) {
-                        ForEach(viewModel.trips) {
+                        ForEach(viewModel.getTripWithoutCulinaryPlaceItem(culinaryPlace: culinaryPlace)) {
                             trip in
                             BottomTripCard(
                                 urls: viewModel.getMax4PlaceImageUrl(for: trip),
