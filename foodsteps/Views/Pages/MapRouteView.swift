@@ -115,7 +115,10 @@ struct MapRouteView: View {
     // 1. Terima parameter koordinat hasil tracking dari View sebelumnya
     let pathCoordinates: [CLLocationCoordinate2D]
     let trip: Trip
-    
+
+    @Environment(\.managedObjectContext) private var moc
+    @Environment(\.dismiss) private var dismiss
+
     // 2. State Data Waypoints untuk Titik Photo Picker (Tanpa terikat garis orange)
     @State private var waypoints: [Waypoint] = []
     
@@ -127,7 +130,10 @@ struct MapRouteView: View {
     @State private var mapSnapshotImage: UIImage? = nil
     @State private var isGeneratingSnapshot = false
     @State private var showCustomShareSheet = false
-    
+
+    // History delete flow (trash button in the nav bar, top-right).
+    @State private var showDeleteConfirmation = false
+
     @State private var offset: CGFloat = 300
     
     @State private var cameraPosition = MapCameraPosition.region(
@@ -346,6 +352,27 @@ struct MapRouteView: View {
             .padding(.bottom, 30)
         }
         .ignoresSafeArea()
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Placed as a trailing toolbar item so it lands in the same nav
+            // bar row — and therefore at the same height — as the system
+            // back chevron on the leading side.
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Image(systemName: "trash")
+                }
+            }
+        }
+        .confirmationDialogOverlay(
+            isPresented: $showDeleteConfirmation,
+            title: "Delete Trip?",
+            message: "This will permanently delete this trip and cannot be undone.",
+            confirmTitle: "Delete"
+        ) {
+            deleteTrip()
+        }
         .photosPicker(isPresented: $showPicker, selection: $selectedItem, matching: .images)
         .sheet(isPresented: $showCustomShareSheet) {
             if let img = mapSnapshotImage {
@@ -377,6 +404,14 @@ struct MapRouteView: View {
         }
     }
     
+    // MARK: - Delete
+
+    private func deleteTrip() {
+        moc.delete(trip)
+        try? moc.save()
+        dismiss()
+    }
+
     // MARK: - FUNGSI BACKGROUND RENDER SNAPSHOT MAP
     func generateMapSnapshot() {
         // Ambil basis rute koordinat dari tracking untuk menentukan batasan gambar snapshot
@@ -577,67 +612,75 @@ struct BottomSheet: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            
-            Capsule()
-                .fill(Color.gray.opacity(0.5))
-                .frame(width: 40, height: 6)
-                .padding(.top, 8)
-            
-            HStack() {
-                Circle()
-                    .fill(.gray.opacity(0.2))
-                    .frame(width: 48, height: 48)
-                    .overlay {
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(.secondary)
+
+            // Header: everything the sheet can be dragged by. Scoped to
+            // just this group (rather than the whole sheet) so dragging
+            // inside the places list below scrolls it instead of fighting
+            // with the sheet's own drag gesture.
+            VStack(spacing: 16) {
+                Capsule()
+                    .fill(Color.gray.opacity(0.5))
+                    .frame(width: 40, height: 6)
+                    .padding(.top, 8)
+
+                HStack() {
+                    Circle()
+                        .fill(.gray.opacity(0.2))
+                        .frame(width: 48, height: 48)
+                        .overlay {
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+
+                    VStack(alignment: .leading,) {
+                        Text("Hara Hara")
+                            .font(.headline)
+                        Text("25 July 2026")
+                            .font(.footnote)
                     }
-                
-                VStack(alignment: .leading,) {
-                    Text("Hara Hara")
-                        .font(.headline)
-                    Text("25 July 2026")
-                        .font(.footnote)
+
+                    Spacer()
                 }
-                
-                Spacer()
+                .padding(.horizontal, 16)
+
+                Text(trip.name ?? "Unknow")
+                    .font(.title2)
+                    .bold()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+
+                HStack(spacing: 8) {
+                    Image(systemName: "star.fill")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+
+                    Text("\(getDiscoverCount()) New Place Discover")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Color(hex: "#FFF5EB")
+                )
+                .clipShape(Capsule())
+
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(height: 1)
+                    .padding(.horizontal, 16)
+
+                Text("Places Visited")
+                    .foregroundStyle(Color(hex: "#4B08B5"))
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
-            
-            Text(trip.name ?? "Unknow")
-                .font(.title2)
-                .bold()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-            
-            HStack(spacing: 8) {
-                Image(systemName: "star.fill")
-                    .font(.headline)
-                    .foregroundStyle(.orange)
-                
-                Text("\(getDiscoverCount()) New Place Discover")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Color(hex: "#FFF5EB")
-            )
-            .clipShape(Capsule())
-            
-            Rectangle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(height: 1)
-                .padding(.horizontal, 16)
-            
-            Text("Places Visited")
-                .foregroundStyle(Color(hex: "#4B08B5"))
-                .font(.title3)
-                .fontWeight(.semibold)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-            
+            .contentShape(Rectangle())
+            .gesture(sheetDragGesture)
+
             ScrollView () {
                 VStack(spacing: 0) {
                     ForEach(Array(waypoints.enumerated()), id: \.element.id) {
@@ -671,23 +714,21 @@ struct BottomSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(radius: 10)
         .offset(y: offset + dragOffset)
-        .gesture(
-            DragGesture()
-                .updating($dragOffset) { value, state, _ in
-                    state = value.translation.height
-                }
-                .onEnded { value in
-                    let newOffset = offset + value.translation.height
-                    
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        if newOffset < (expandedOffset + collapsedOffset) / 2 {
-                            offset = expandedOffset
-                        } else {
-                            offset = collapsedOffset
-                        }
-                    }
-                }
-        )
+        // Live drag itself is driven by dragOffset every frame (no
+        // animation needed there — that's what makes it track the finger
+        // 1:1), only the settle-into-place on release is animated.
+        .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.82, blendDuration: 0.2), value: offset)
+    }
+
+    private var sheetDragGesture: some Gesture {
+        DragGesture()
+            .updating($dragOffset) { value, state, _ in
+                state = value.translation.height
+            }
+            .onEnded { value in
+                let newOffset = offset + value.translation.height
+                offset = newOffset < (expandedOffset + collapsedOffset) / 2 ? expandedOffset : collapsedOffset
+            }
     }
 
     func getDiscoverCount() -> Int {

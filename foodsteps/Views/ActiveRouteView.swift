@@ -312,7 +312,13 @@ struct ActiveRouteView: View {
                 state = value.translation.height
             }
             .onEnded { value in
-                sheetHeight -= value.translation.height
+                // Live tracking (dragTranslation) already follows the
+                // finger 1:1 every frame — only the settle once the finger
+                // lifts needs an explicit animation, otherwise the sheet
+                // snaps to its resting height instantly.
+                withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.86, blendDuration: 0.25)) {
+                    sheetHeight -= value.translation.height
+                }
             }
     }
 

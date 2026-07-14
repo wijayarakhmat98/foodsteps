@@ -59,10 +59,30 @@ struct TripHistoryCard: View {
                 .fontWeight(.bold)
                 .foregroundColor(.primary)
                 .lineLimit(1) // Membatasi agar teks nama trip tidak merusak layout ke bawah
+
+            Text(scheduleLabel)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .padding(.top, 2)
         }
         .onTapGesture {
             AppRoute.push(.tripDetail(trip: trip))
         }
+    }
+
+    /// Same "EEE, MMM d · HH:mm-HH:mm" format PlacesView uses for the
+    /// schedule row, so a trip reads the same way whether you're looking
+    /// at its card or its detail screen.
+    private var scheduleLabel: String {
+        guard let start = trip.scheduledStart, let end = trip.scheduledEnd else {
+            return "No schedule set"
+        }
+        let day = DateFormatter()
+        day.dateFormat = "EEE, MMM d"
+        let time = DateFormatter()
+        time.dateFormat = "HH:mm"
+        return "\(day.string(from: start)) · \(time.string(from: start))-\(time.string(from: end))"
     }
 }
 

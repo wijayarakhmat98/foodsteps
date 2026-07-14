@@ -69,9 +69,17 @@ struct PlacesView: View {
             sortHeaderRow
             placesList
         }
-        .sheet(isPresented: $isShowingAddSheet) { addStopSheet }
+        .sheet(isPresented: $isShowingAddSheet) {
+            addStopSheet
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $isEditingSchedule) { scheduleSheet }
-        .sheet(isPresented: $isEditingMeetingPoint) { meetingPointSheet }
+        .sheet(isPresented: $isEditingMeetingPoint) {
+            meetingPointSheet
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .alert("Add Person", isPresented: $isAddingParticipant) {
             TextField("Name", text: $newParticipantName)
             Button("Cancel", role: .cancel) { newParticipantName = "" }

@@ -17,6 +17,15 @@ private enum TripSegment: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// How the History segment's trips are ordered. Only relevant there —
+/// Planned trips stay in their natural (most-recently-created-first) order.
+private enum TripSortOption: String, CaseIterable, Identifiable {
+    case date = "Date"
+    case name = "Name"
+
+    var id: String { rawValue }
+}
+
 struct TripHistoryView: View {
     
     @StateObject private var viewModel = TripHistoryViewModel(context: dataController.container.viewContext)
@@ -28,17 +37,33 @@ struct TripHistoryView: View {
     
     @State private var showBottomSheet = false
     @State private var selectedSegment: TripSegment = .planned
+    @State private var historySortOption: TripSortOption = .date
 
     /// Trips filtered to the active segment — "History" is anything the
     /// current user has already saved a result for (`hasCurrentUserCompleted`),
-    /// "Planned" is everything else.
+    /// "Planned" is everything else. History is additionally sorted per
+    /// `historySortOption`, chosen from the sort menu that replaces the "+"
+    /// button on that segment.
     private var filteredTrips: [Trip] {
-        viewModel.trips.filter { trip in
+        let segmentTrips = viewModel.trips.filter { trip in
             switch selectedSegment {
             case .planned:
                 return !trip.hasCurrentUserCompleted
             case .history:
                 return trip.hasCurrentUserCompleted
+            }
+        }
+
+        guard selectedSegment == .history else { return segmentTrips }
+
+        switch historySortOption {
+        case .date:
+            return segmentTrips.sorted {
+                ($0.scheduledStart ?? $0.wrappedCreatedAt) > ($1.scheduledStart ?? $1.wrappedCreatedAt)
+            }
+        case .name:
+            return segmentTrips.sorted {
+                ($0.name ?? "").localizedCaseInsensitiveCompare($1.name ?? "") == .orderedAscending
             }
         }
     }
@@ -53,15 +78,19 @@ struct TripHistoryView: View {
 
                     Spacer()
 
-                    Button {
-                        showBottomSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .foregroundStyle(.white)
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .frame(width: 44, height: 44)
-                            .glassEffect(in: Circle())
+                    if selectedSegment == .planned {
+                        Button {
+                            showBottomSheet = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .foregroundStyle(.white)
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .frame(width: 44, height: 44)
+                                .glassEffect(in: Circle())
+                        }
+                    } else {
+                        historySortMenu
                     }
                 }
 
@@ -140,6 +169,28 @@ struct TripHistoryView: View {
 
     private var emptySubtitle: String {
         selectedSegment == .planned ? "Click “+” to create new plan" : "Trips you finish will show up here"
+    }
+
+    // MARK: - History sort menu
+
+    /// Replaces the "+" button when the History segment is active — trips
+    /// there are all already completed, so "add a trip" doesn't apply, but
+    /// choosing how they're ordered does.
+    private var historySortMenu: some View {
+        Menu {
+            Picker("Sort by", selection: $historySortOption) {
+                ForEach(TripSortOption.allCases) { option in
+                    Text(option.rawValue).tag(option)
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                .foregroundStyle(.white)
+                .font(.title2)
+                .fontWeight(.semibold)
+                .frame(width: 44, height: 44)
+                .glassEffect(in: Circle())
+        }
     }
 
     // MARK: - Segmented control

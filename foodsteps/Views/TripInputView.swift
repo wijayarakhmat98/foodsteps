@@ -69,6 +69,7 @@ struct TripInputView: View {
     @State private var isPreparingRoute = false
 
     @State private var showStartConfirmation = false
+    @State private var showMissingRequirementsAlert = false
 
     @State private var navigateToNavigation = false
 
@@ -164,6 +165,11 @@ struct TripInputView: View {
         ) {
             beginTrip()
         }
+        .alert("Almost Ready", isPresented: $showMissingRequirementsAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(missingRequirementsMessage)
+        }
         .onAppear {
             locationManager.requestPermissionAndStart()
             syncRoutePlannerOrderIfNeeded()
@@ -181,6 +187,30 @@ struct TripInputView: View {
     }
 
     // MARK: - Shared "Start Trip" button
+
+    /// A trip can only be started once a meeting point has been set (see
+    /// `meetingPointStop`) AND at least one place has been selected. The
+    /// meeting point requirement isn't just cosmetic — `computeRoute` falls
+    /// back to the device's current location when there's no meeting point,
+    /// which silently produces a route that doesn't match what the group
+    /// agreed to meet at. Requiring it up front avoids that surprise.
+    private var canStartTrip: Bool {
+        meetingPointStop != nil && !selectedPlaceStops.isEmpty
+    }
+
+    private var missingRequirementsMessage: String {
+        switch (meetingPointStop == nil, selectedPlaceStops.isEmpty) {
+        case (true, true):
+            return "Set a meeting point and select at least one place before starting the trip."
+        case (true, false):
+            return "Set a meeting point before starting the trip."
+        case (false, true):
+            return "Select at least one place before starting the trip."
+        default:
+            return ""
+        }
+    }
+
     private var startTripButton: some View {
         Button(action: startTrip) {
             if isPreparingRoute {
@@ -198,20 +228,27 @@ struct TripInputView: View {
         .font(.headline)
         .foregroundColor(.white)
         .padding(.vertical, 16)
-        .background(selectedPlaceStops.isEmpty || isPreparingRoute ? Color.brandOrange.opacity(0.5) : Color.brandOrange)
+        .background(!canStartTrip || isPreparingRoute ? Color.brandOrange.opacity(0.5) : Color.brandOrange)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .padding()
         .background(.bar)
-        .disabled(selectedPlaceStops.isEmpty || isPreparingRoute)
+        // Only truly disabled while a route is being computed — when a
+        // requirement is missing, the button stays tappable (just dimmed)
+        // so `startTrip()` can explain exactly what's missing instead of
+        // the tap silently doing nothing.
+        .disabled(isPreparingRoute)
     }
 
     private func startTrip() {
-        guard !selectedPlaceStops.isEmpty else { return }
+        guard canStartTrip else {
+            showMissingRequirementsAlert = true
+            return
+        }
         showStartConfirmation = true
     }
 
     private func beginTrip() {
-        guard !selectedPlaceStops.isEmpty else { return }
+        guard canStartTrip else { return }
         if routePlanner.orderedStops.isEmpty {
             computeRoute { navigateToNavigation = true }
         } else {
